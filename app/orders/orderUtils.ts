@@ -1,0 +1,147 @@
+// orderUtils.ts - Order Management Utilities
+
+import { Order, DisplayMode } from './types';
+import { STATUS_ORDER } from './constants';
+
+export const parseDeoNumber = (deo: string | undefined | null) => {
+  const deoString = String(deo || '');
+  const match = deoString.match(/^(.*?)(-([A-Z]))?$/);
+  const base = match ? match[1] : deoString;
+  const suffixChar = match ? match[3] : undefined;
+  const suffixNum = suffixChar ? suffixChar.charCodeAt(0) - 'A'.charCodeAt(0) + 1 : 0;
+  return { base, suffixNum };
+};
+
+export const sortOrdersByDeo = (
+  orders: Order[],
+  displayMode: DisplayMode,
+  ascending: boolean = true
+): Order[] => {
+  return [...orders].sort((a, b) => {
+    const aParsed = parseDeoNumber(a.deoNo);
+    const bParsed = parseDeoNumber(b.deoNo);
+
+    if (displayMode === 'grid') {
+      // Descending order for grid view
+      if (aParsed.base === bParsed.base) {
+        return bParsed.suffixNum - aParsed.suffixNum;
+      }
+      return bParsed.base.localeCompare(aParsed.base);
+    } else {
+      // Ascending or descending based on parameter
+      if (aParsed.base === bParsed.base) {
+        return ascending
+          ? aParsed.suffixNum - bParsed.suffixNum
+          : bParsed.suffixNum - aParsed.suffixNum;
+      }
+      return ascending
+        ? aParsed.base.localeCompare(bParsed.base)
+        : bParsed.base.localeCompare(aParsed.base);
+    }
+  });
+};
+
+export const sortOrdersByStatus = (orders: Order[]): Order[] => {
+  return [...orders].sort((a, b) => {
+    const indexA = STATUS_ORDER.indexOf(a.status || '');
+    const indexB = STATUS_ORDER.indexOf(b.status || '');
+    return indexA - indexB;
+  });
+};
+
+export const filterOrders = (
+  orders: Order[],
+  searchTerm: string,
+  filterStatus: string,
+  filterPaymentStatus: string
+): Order[] => {
+  return orders.filter((order) => {
+    const matchesSearch =
+      (order.deoNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (order.client || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (order.contactNo && order.contactNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (order.organizationContact &&
+        order.organizationContact.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (order.products && order.products.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (order.status && order.status.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (order.customerPaymentStatus || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatusFilter =
+      filterStatus === '' || filterStatus === 'all_statuses' || order.status === filterStatus;
+    const matchesPaymentStatusFilter =
+      filterPaymentStatus === '' ||
+      filterPaymentStatus === 'all_payments' ||
+      order.customerPaymentStatus === filterPaymentStatus;
+
+    return matchesSearch && matchesStatusFilter && matchesPaymentStatusFilter;
+  });
+};
+
+export const generateNextPartDeliveryDeoNo = (
+  baseDeoNo: string,
+  orders: Order[]
+): string | null => {
+  const existingPartDeoRegex = new RegExp(`^${baseDeoNo}-([A-Z])$`);
+
+  const existingSuffixes = orders
+    .filter((order) => order.deoNo.match(existingPartDeoRegex))
+    .map((order) => order.deoNo.match(existingPartDeoRegex)![1]);
+
+  let maxSuffixChar = '';
+  if (existingSuffixes.length > 0) {
+    maxSuffixChar = existingSuffixes.reduce((max, current) => (current > max ? current : max), '');
+  }
+
+  let nextSuffix: string;
+  if (maxSuffixChar === '') {
+    nextSuffix = 'A';
+  } else {
+    const nextCharCode = maxSuffixChar.charCodeAt(0) + 1;
+    if (nextCharCode > 'Z'.charCodeAt(0)) {
+      return null; // Exceeded limit
+    }
+    nextSuffix = String.fromCharCode(nextCharCode);
+  }
+  return `${baseDeoNo}-${nextSuffix}`;
+};
+
+export const groupOrdersByDate = (orders: Order[]): Record<string, Order[]> => {
+  const grouped: Record<string, Order[]> = {};
+
+  orders.forEach((order) => {
+    if (!order.updatedAt) return;
+    const date = new Date(order.updatedAt);
+    const year = date.getFullYear();
+    const month = date.toLocaleString('default', { month: 'long' });
+    const day = date.getDate().toString().padStart(2, '0');
+    const groupKey = `${day} ${month} ${year}`;
+
+    if (!grouped[groupKey]) {
+      grouped[groupKey] = [];
+    }
+    grouped[groupKey].push(order);
+  });
+
+  // Sort orders within each date group
+  Object.keys(grouped).forEach((key) => {
+    grouped[key].sort(
+      (a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime()
+    );
+  });
+
+  return grouped;
+};
+
+export const validateOrderData = (orderData: Partial<Order>): string | null => {
+  if (!orderData.deoNo) return 'DEO No. is required.';
+  if (!orderData.client?.trim()) return 'Client Name is required.';
+  if (!orderData.contactNo?.trim()) return 'Contact No. is required.';
+  
+  if (orderData.contactNo.trim().length !== 10 || !/^\d{10}$/.test(orderData.contactNo.trim())) {
+    return 'Contact No. must be exactly 10 digits.';
+  }
+  
+  if (!orderData.products?.trim()) return 'Product Details are required.';
+  
+  return null;
+};
