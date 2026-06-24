@@ -1,0 +1,21 @@
+# API Migration Tasks
+
+- [x] Create task.md and initialize tracking
+- [x] Create endpoint files:
+  - [x] `lib/api/endpoints/leadsCenterApi.ts`
+  - [x] `lib/api/endpoints/leadsApi.ts`
+  - [x] `lib/api/endpoints/ordersApi.ts`
+  - [x] `lib/api/endpoints/tasksApi.ts`
+  - [x] `lib/api/endpoints/fileApi.ts`
+- [x] Migrate consumer components and pages:
+  - [x] Target 1: `app/leads-center/page.tsx`
+  - [x] Target 2: `app/leads/page.tsx`
+  - [x] Target 3: Move `canTransitionToGeneral` to `app/orders/constants.ts` and migrate `app/orders` files
+  - [x] Target 4: Migrate tasks consumer components
+  - [x] Target 5: Migrate file API consumer components
+- [x] Delete legacy API files:
+  - [x] `app/orders/apiService.ts`
+  - [x] `lib/api/taskApi.ts`
+  - [x] `lib/api/fileApi.ts`
+  - [x] `lib/api/attendanceApi.ts`
+- [ ] Verify build via `npm run build` or `npx next build`
