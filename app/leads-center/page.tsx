@@ -638,7 +638,7 @@ const App: React.FC = () => {
     const [claimingLeadId, setClaimingLeadId] = useState<string | null>(null);
     const [progressData, setProgressData] = useState<ProgressData | null>(null);
     // Authentication and User Profile States
-     const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+     const { user: clerkUser } = useUser();
 
     const fetchUserAccess = useCallback(async () => {
         try {

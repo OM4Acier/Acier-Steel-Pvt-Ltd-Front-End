@@ -3,8 +3,8 @@
 // TODO: Implement
 // permissions.ts - Role-based Permission Utilities
 
-import { UserRole } from '@/types/rbac.types';
-import { UserProfile, OrderStatus } from './types';
+import { UserProfile, UserRole } from '@/types/rbac.types';
+import { OrderStatus } from './types';
 import { AuthUtils } from '@/lib/authHelpers';
 
 // Role Checkers

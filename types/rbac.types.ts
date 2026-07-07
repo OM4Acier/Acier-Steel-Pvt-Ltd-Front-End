@@ -14,7 +14,7 @@ export interface UserProfile {
   permissions?: Permission[];
   contactNo?: string;
   organization?: string;
-  accessToken: any;
+  accessToken?: any;
   department?: string;
   isActive?: boolean;
   expiresAt?: Date;

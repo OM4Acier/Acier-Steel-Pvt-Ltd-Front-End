@@ -23,7 +23,7 @@ import {
   FileDown, Settings2,
 } from 'lucide-react';
 
-import { Order, UserProfile, EditHistoryEntry, DialogMessageType } from '../types';
+import { Order, EditHistoryEntry, DialogMessageType } from '../types';
 import { ordersApi } from '@/lib/api/endpoints/ordersApi';
 const apiService = ordersApi;
 import { renderMarkdownText } from '@/components/markdownRenderer';
@@ -53,6 +53,7 @@ import {
 } from '../pdfConfig';
 import { openOrderPdfInNewTab } from '../generateOrderPdf';
 import { PdfConfigModal } from './PdfConfigModal';
+import { UserProfile } from '@/types/rbac.types';
 
 
 interface OrderDetailsDialogProps {

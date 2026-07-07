@@ -105,9 +105,9 @@ export const BlockRoles: React.FC<BlockRolesProps> = ({
   children,
   fallback = null
 }) => {
-  const { hasBlockedRole } = useRBAC(user);
+  const { canAccess } = useRBAC(user);
 
-  const isBlocked = hasBlockedRole(blockedRoles);
+  const isBlocked = canAccess(blockedRoles);
 
   return <>{!isBlocked ? children : fallback}</>;
 };
@@ -167,7 +167,7 @@ export const CombinedProtected: React.FC<CombinedProtectedProps> = ({
   children,
   fallback = null
 }) => {
-  const { hasAnyRole, hasBlockedRole } = useRBAC(user);
+  const { hasAnyRole, canAccess } = useRBAC(user);
 
   if (!user) return <>{fallback}</>;
 
@@ -178,7 +178,7 @@ export const CombinedProtected: React.FC<CombinedProtectedProps> = ({
     return <>{fallback}</>;
   }
 
-  if (blockedRoles && hasBlockedRole(blockedRoles)) {
+  if (blockedRoles && canAccess(blockedRoles)) {
     return <>{fallback}</>;
   }
 

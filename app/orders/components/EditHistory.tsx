@@ -13,8 +13,9 @@ import { History, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ordersApi } from '@/lib/api/endpoints/ordersApi';
 const apiService = ordersApi;
-import { EditHistoryEntry, UserProfile } from '../types';
+import { EditHistoryEntry } from '../types';
 import { toast } from 'sonner';
+import { UserProfile } from '@/types/rbac.types';
 
 
 interface EditHistoryProps {

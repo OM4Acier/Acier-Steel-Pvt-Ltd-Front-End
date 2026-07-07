@@ -1,9 +1,13 @@
+'use client';
+
+import { Button } from '@/components/ui/button';
+
 /**
  * app/(auth)/forgot-password/page.tsx
  *
  * Forgot Password Flow using Clerk v7 Core 3 patterns.
  * Maintains neumorphic design consistency with LoginPage.
- */
+
 
 'use client';
 
@@ -76,9 +80,9 @@ const buttonLoading = 'opacity-70 cursor-wait shadow-none active:scale-100';
 
 type Step = 'EMAIL' | 'RESET';
 
-export default function ForgotPasswordPage() {
+export function ForgotPasswordPage() {
   const router = useRouter();
-  const { signIn, isLoaded } = useSignIn();
+  const { signIn } = useSignIn();
   const { setActive } = useClerk();
   
   const [step, setStep] = useState<Step>('EMAIL');
@@ -292,7 +296,7 @@ export default function ForgotPasswordPage() {
 
       <Form {...resetForm}>
         <form onSubmit={resetForm.handleSubmit(onResetPassword)} className="space-y-8">
-          {/* OTP Code */}
+          {/* OTP Code 
           <FormField
             control={resetForm.control}
             name="code"
@@ -323,8 +327,8 @@ export default function ForgotPasswordPage() {
             )}
           />
 
-          {/* New Password */}
-          <FormField
+/          {/* New Password
+//          <FormField
             control={resetForm.control}
             name="password"
             render={({ field }) => (
@@ -392,4 +396,19 @@ export default function ForgotPasswordPage() {
       </div>
     </CardShell>
   );
+}
+ */
+export default function notavailable(){
+  return (
+    <div className="h-screen flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold text-gray-700 mb-4">Forgot Password</h1>
+        <p className="text-gray-500 mb-6">This feature is currently unavailable.</p>
+        <Button onClick={() => window.location.href = '/login'} variant="outline">
+          Back to Login
+        </Button>
+      </div>
+    </div>
+  );
+
 }

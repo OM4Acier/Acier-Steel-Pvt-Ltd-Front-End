@@ -10,7 +10,6 @@ import { Toaster as ToasterHot } from 'react-hot-toast';
 import { LoadingProvider } from "@/context/LoadingContext";
 import { NavbarExtensionProvider } from "@/context/NavbarExtensionContext";
 import { AppShell } from "@/components/AppShell";
-import { SessionProvider } from "@/providers/SessionProvider";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ClerkTokenProvider } from "@/providers/ClerkTokenProvider";
 

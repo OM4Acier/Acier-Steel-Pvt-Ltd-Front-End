@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { useUser } from '@clerk/nextjs';
-import { usePermissionStore } from '@/stores/permission-store';
 import { NavbarExtension } from '@/context/NavbarExtensionContext';
 import { NavButton } from '@/components/NavButton';
 
