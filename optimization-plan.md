@@ -71,7 +71,7 @@ const role  = usePermissionStore(s => s.role);
 const email = usePermissionStore(s => s.manifests); // or add email to store
 
 // Option B — if full Clerk user needed (synchronous, no API call):
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@clerk/react';
 const { user } = useUser(); // synchronous — Clerk context, no network
 ```
 

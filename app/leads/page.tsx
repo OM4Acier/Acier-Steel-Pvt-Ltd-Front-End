@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 import { UserProfile } from '@/types/rbac.types';
 import { NavButton } from '@/components/NavButton';
 import { NavbarExtension } from '@/context/NavbarExtensionContext';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@clerk/react';
 import { usePermissionStore } from '@/stores/permission-store';
 import { NAV_COLOR_MAP } from '@/lib/config/colors';
 

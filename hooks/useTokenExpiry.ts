@@ -14,7 +14,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useClerk } from '@clerk/nextjs';
+import { useClerk } from '@clerk/react';
 import { toast } from 'sonner';
 import { TOKEN_EXPIRED_EVENT } from '@/lib/auth/client-auth';
 

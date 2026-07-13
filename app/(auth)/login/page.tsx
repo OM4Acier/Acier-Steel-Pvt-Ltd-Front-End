@@ -1,7 +1,7 @@
 /**
  * app/(auth)/login/page.tsx
  *
- * Stack: Next.js App Router · Static Export · @clerk/nextjs v7 · shadcn/ui · react-hook-form · zod
+ * Stack: Next.js App Router · Static Export · @clerk/react v7 · shadcn/ui · react-hook-form · zod
  *
  * Two render states:
  *   1. Password step  — default
@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 import { Mail, Lock, Loader2, ArrowRight, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import { useSignIn, useClerk } from '@clerk/nextjs';
+import { useSignIn, useClerk } from '@clerk/react';
 import {
   Form,
   FormControl,

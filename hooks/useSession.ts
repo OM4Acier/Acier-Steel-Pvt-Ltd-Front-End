@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAuth, useUser, useClerk } from '@clerk/nextjs';
+import { useAuth, useUser, useClerk } from '@clerk/react';
 import type { UserProfile } from '@/types/rbac.types';
 import { ROUTES } from '@/lib/config/routes';
 

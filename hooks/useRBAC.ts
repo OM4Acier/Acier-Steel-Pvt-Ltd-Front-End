@@ -10,7 +10,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@clerk/react';
 import { UserProfile, UserRole, Permission, AccessRule, AccessCheckResult } from '@/types/rbac.types';
 import { rbac } from '@/utils/rbac.utils';
 

@@ -19,7 +19,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useAuth, useUser, useClerk } from '@clerk/nextjs';
+import { useAuth, useUser, useClerk } from '@clerk/react';
 import { usePathname, useRouter } from 'next/navigation';
 import { requestRegistry } from '@/lib/request-registry';
 import { usePermissionStore } from '@/stores/permission-store';

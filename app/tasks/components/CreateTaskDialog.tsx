@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreateTaskInput, RecurrenceFrequency } from '../types/task';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
+import { Calendar as BasicCalendar } from '@/components/ui/basic-calendar';
 import { Repeat, Calendar as CalendarIcon2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -247,7 +247,7 @@ export function CreateTaskDialog({ open, onOpenChange, onCreateTask, users, user
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0 z-[60]">
-                        <Calendar
+                        <BasicCalendar
                           mode="single"
                           selected={recurrenceEndDate}
                           onSelect={setRecurrenceEndDate}

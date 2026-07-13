@@ -8,8 +8,8 @@ import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { useUser } from '@clerk/nextjs';
+import { Calendar as BasicCalendar } from '@/components/ui/basic-calendar';
+import { useUser } from '@clerk/react';
 import { NavbarExtension } from '@/context/NavbarExtensionContext';
 import { NavButton } from '@/components/NavButton';
 
@@ -154,7 +154,7 @@ export default function ReportPage() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0">
-                <Calendar
+                <BasicCalendar
                   mode="single"
                   selected={selectedDate}
                   onSelect={setSelectedDate}

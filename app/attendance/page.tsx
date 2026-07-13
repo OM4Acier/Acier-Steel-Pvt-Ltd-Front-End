@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 
 // Context & Libs
 import { NavbarExtension } from '@/context/NavbarExtensionContext';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@clerk/react';
 import {attendanceApi, AttendanceLocation, AttendanceStatus, GPSLocation} from '@/lib/api/endpoints/attendanceApi'
 
 /**

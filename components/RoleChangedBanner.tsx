@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useClerk } from '@clerk/nextjs';
+import { useClerk } from '@clerk/react';
 import { usePermissionStore } from '@/stores/permission-store';
 import { AlertCircle, X, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';

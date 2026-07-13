@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { useLoading } from '@/context/LoadingContext';
 import { NavbarExtension } from '@/context/NavbarExtensionContext';
 import { NavButton } from '@/components/NavButton';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@clerk/react';
 import { usePermissionStore } from '@/stores/permission-store';
 import { 
   dashboardApi, 

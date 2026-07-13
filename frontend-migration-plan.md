@@ -76,7 +76,7 @@
 ## Install — Before Any Code
 
 ```bash
-npm install @clerk/nextjs
+npm install @clerk/react
 ```
 
 Add to `.env.local`:
@@ -183,7 +183,7 @@ Add cancel guard in response interceptor: swallow cancellation silently
 - Do NOT redesign the page. Existing layout and styles stay exactly as-is.
 - Remove: import of `lib/auth` login function, manual token storage calls.
 - Remove: any `localStorage.setItem` or `sessionStorage.setItem` for tokens.
-- Add: `useSignIn` from `@clerk/nextjs`.
+- Add: `useSignIn` from `@clerk/react`.
 - Replace form submit handler body only:
   ```
   Before: call lib/auth login → store token manually → redirect
@@ -212,7 +212,7 @@ Login must work before AppShell guard is activated.
 
 **Rules:**
 - Remove: `useSession`, `useTokenExpiry` imports and calls.
-- Add: `useAuth`, `useUser`, `useClerk` from `@clerk/nextjs`.
+- Add: `useAuth`, `useUser`, `useClerk` from `@clerk/react`.
 - Route guard: `useEffect` — if `isLoaded && !isSignedIn` → `router.replace('/login')`.
 - Request cancellation: `usePathname()` watcher → `requestRegistry.cancelAll()` on change.
 - Permission loader: single `useEffect` stub — `if (isSignedIn) { /* Phase 2 */ }`.
@@ -232,7 +232,7 @@ Login must work before AppShell guard is activated.
 
 | Step | File | Status | Verified |
 |---|---|---|---|
-| Install | `@clerk/nextjs` + `.env.local` | ⬜ Pending | ⬜ |
+| Install | `@clerk/react` + `.env.local` | ⬜ Pending | ⬜ |
 | 1 | `app/layout.tsx` | ⬜ Pending | ⬜ |
 | 2 | `providers/ClerkTokenProvider.tsx` | ⬜ Pending | ⬜ |
 | 3a | `lib/request-registry.ts` | ⬜ Pending | ⬜ |
@@ -561,7 +561,7 @@ This shim must be in place before any hook shims begin.
 - `TOKEN_EXPIRED_EVENT` — keep exactly as-is. Still dispatched by axios interceptor.
 - `notifyTokenExpired()` — keep event dispatch. Remove `clearSession()` call inside it (Clerk owns signOut).
 - `getToken()` — return `null`. Add `console.warn` in dev: `"[client-auth] getToken() is deprecated. Token injection handled by ClerkTokenProvider."` This surfaces any call site still using it.
-- `getSession()` — return `null`. Add `console.warn` in dev: `"[client-auth] getSession() is deprecated. Use useUser() from @clerk/nextjs."`.
+- `getSession()` — return `null`. Add `console.warn` in dev: `"[client-auth] getSession() is deprecated. Use useUser() from @clerk/react."`.
 - `saveSession()` — throw `Error('[client-auth] saveSession() is deprecated. Login handled by Clerk useSignIn().')`. Login page was already migrated in Step 4 — no legitimate caller remains.
 - `clearSession()` — keep only legacy localStorage cleanup (`removeItem('accessToken')`, `removeItem('currentUserProfile')`). Remove `profileCache = null` (cache no longer exists).
 - `tokenStore` — all methods return `null` / no-op. Keep `clear()` for legacy key cleanup only.
@@ -587,7 +587,7 @@ This shim must be in place before any hook shims begin.
 
 **Rules:**
 - Signature unchanged: `useSession({ required?: boolean })`.
-- Read user from `useUser()` and `useAuth()` from `@clerk/nextjs`.
+- Read user from `useUser()` and `useAuth()` from `@clerk/react`.
 - `user.role` → `useUser().user?.publicMetadata?.role as string` — set by BAPI when admin creates/updates user.
 - `user.name`, `user.email` → from `clerkUser.fullName`, `clerkUser.primaryEmailAddress`.
 - `accessToken` → return `null` and add `console.warn` in dev:
@@ -640,7 +640,7 @@ This shim must be in place before any hook shims begin.
 
 **Rules:**
 - Remove import of `useSession`.
-- Add import of `useUser` from `@clerk/nextjs`.
+- Add import of `useUser` from `@clerk/react`.
 - Role reads from `useUser().user?.publicMetadata?.role as string` — synchronous, available as soon as Clerk loads.
 - All existing return values (`hasRole`, `hasAnyRole`, `hasAllRoles`, or whatever shape exists) — keep identical.
 - Do NOT delete this file.

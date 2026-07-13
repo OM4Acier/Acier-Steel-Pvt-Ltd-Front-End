@@ -1,7 +1,7 @@
 # Project Instructions - Cleck Frontend
 
 ## Clerk SDK Conventions (v7+)
-This project uses `@clerk/nextjs` v7.4.1+. Follow these patterns for authentication hooks to avoid TypeScript errors and ensure correct state management:
+This project uses `@clerk/react` v7.4.1+. Follow these patterns for authentication hooks to avoid TypeScript errors and ensure correct state management:
 
 - **Hook Separation**: 
   - Use `useAuth()` to retrieve the `isLoaded` boolean.
@@ -14,7 +14,7 @@ This project uses `@clerk/nextjs` v7.4.1+. Follow these patterns for authenticat
 
 ### Standard Implementation Pattern
 ```typescript
-import { useSignIn, useClerk, useAuth } from '@clerk/nextjs';
+import { useSignIn, useClerk, useAuth } from '@clerk/react';
 
 export default function LoginPage() {
   const { isLoaded } = useAuth();

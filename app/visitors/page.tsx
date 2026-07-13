@@ -9,7 +9,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@clerk/react';
 import { usePermissionStore } from '@/stores/permission-store';
 import { visitorApi } from '@/lib/api/endpoints/visitorApi';
 import { VisitorData } from '@/types/visitor.types';

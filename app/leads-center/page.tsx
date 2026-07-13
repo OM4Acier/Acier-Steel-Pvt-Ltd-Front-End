@@ -16,7 +16,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Loader2, Calendar, Search, Phone, Mail, Users, AlertCircle, CircleCheck, XCircle, BarChart, CheckCircle, RefreshCcw, Paperclip, Plus, Upload, X, ArrowLeft, ArrowRight, TrendingUp, AlertTriangle, LucideIcon } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Calendar as CalendarComponent } from '@/components/ui/basic-calendar';
 import { toast } from 'sonner';
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -24,7 +24,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { NavButton } from '@/components/NavButton';
 import { NavbarExtension } from '@/context/NavbarExtensionContext';
 import { leadsCenterApi } from '@/lib/api/endpoints/leadsCenterApi';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@clerk/react';
 
 // --- Global Constants ---
 const CACHE_DURATION_MS: number = 3600000; // 1 hour

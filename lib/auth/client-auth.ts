@@ -41,12 +41,12 @@ export const tokenStore = {
   },
 };
 
-/** @deprecated Use useUser() from @clerk/nextjs */
+/** @deprecated Use useUser() from @clerk/react */
 export async function verifyToken(): Promise<UserProfile> {
   throw new Error('[client-auth] verifyToken() is deprecated.');
 }
 
-/** @deprecated Use useUser() from @clerk/nextjs */
+/** @deprecated Use useUser() from @clerk/react */
 export async function getSession(): Promise<UserProfile | null> {
   if (process.env.NODE_ENV === 'development') {
     console.warn('[client-auth] getSession() is deprecated. Use useSession() hook.');

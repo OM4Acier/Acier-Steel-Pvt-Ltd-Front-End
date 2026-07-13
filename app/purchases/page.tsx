@@ -51,7 +51,7 @@ import {
   FileReference,
   EditHistoryEntry
 } from '@/types/purchases.types';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@clerk/react';
 
 // --- File Compression and Conversion Utility ---
 

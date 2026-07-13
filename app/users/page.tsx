@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@clerk/react';
 import { usePermissionStore } from '@/stores/permission-store';
 import { usePermissions } from '@/hooks/usePermissions';
 import { NavbarExtension } from '@/context/NavbarExtensionContext';

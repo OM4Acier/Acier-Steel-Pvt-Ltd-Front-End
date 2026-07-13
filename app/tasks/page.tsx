@@ -31,7 +31,7 @@ import { Badge } from '@/components/ui/badge';
 import { UserRole } from '@/types/rbac.types';
 import { AuthUtils } from '@/lib/authHelpers';
 //import router from 'next/router';import { useProtectedRoute } from '@/hooks/useProtectedRoute';import { useKeyboardShortcuts } from './hooks/use-keyboard-shortcuts';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@clerk/react';
 import { usePermissionStore } from '@/stores/permission-store';
 import { NavbarExtension } from '@/context/NavbarExtensionContext';
 import { NavButton } from '@/components/NavButton';

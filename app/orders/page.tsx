@@ -41,7 +41,7 @@ import { ArrowUpDown, LayoutGrid, LayoutList } from 'lucide-react';
 import { useGroupedOrders } from '@/utils/orderSorters';
 import { NavbarExtension } from '@/context/NavbarExtensionContext';
 import { Switch } from '@/components/ui/switch';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@clerk/react';
 import { usePermissionStore } from '@/stores/permission-store';
 import { NavButton } from '@/components/NavButton';
 import { getCreateShortcuts } from '@/lib/config/routes';
