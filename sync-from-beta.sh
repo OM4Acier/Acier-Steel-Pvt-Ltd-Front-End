@@ -22,12 +22,14 @@
 set -euo pipefail
 
 APPLY=0
+FULL=0
 REPO_URL="${GIT_URL:-https://github.com/OM4Acier/Acier-Steel-Pvt-Ltd-Front-End.git}"
 REF="${REF:-origin/beta}"
 
 for a in "$@"; do
   case "$a" in
     --apply) APPLY=1 ;;
+    --full)  FULL=1 ;;
     --dry-run) APPLY=0 ;;
     http*://*) REPO_URL="$a" ;;
     *) REF="$a" ;;
@@ -95,11 +97,22 @@ for f in "${LOCAL[@]}"; do
   fi
 done
 
-echo ">> In beta but ABSENT from folder (will NOT be added):"
+ADDED_NEW=0
+echo ">> In beta but ABSENT from folder:"
 for f in "${BETA[@]}"; do
   if [ ! -f "$TARGET/$f" ]; then
-    echo "   SKIP    $f"
-    SKIPPED_NEW=$((SKIPPED_NEW+1))
+    if [ $FULL -eq 1 ] && [ $APPLY -eq 1 ]; then
+      mkdir -p "$TARGET/$(dirname "$f")"
+      cp -f "$TMP/$f" "$TARGET/$f"
+      echo "   ADD     $f"
+      ADDED_NEW=$((ADDED_NEW+1))
+    elif [ $FULL -eq 1 ]; then
+      echo "   ADD*    $f   (would be added with --apply --full)"
+      ADDED_NEW=$((ADDED_NEW+1))
+    else
+      echo "   SKIP    $f"
+      SKIPPED_NEW=$((SKIPPED_NEW+1))
+    fi
   fi
 done
 
@@ -107,10 +120,17 @@ echo
 echo "================ SYNC SUMMARY ================"
 echo "Updated (common files):     $UPDATED"
 echo "Preserved (extra in folder): $PRESERVED_EXTRA"
-echo "Skipped new (beta only):     $SKIPPED_NEW"
+if [ $FULL -eq 1 ]; then
+  echo "Added new (beta only):       $ADDED_NEW"
+else
+  echo "Skipped new (beta only):     $SKIPPED_NEW"
+fi
 echo "=============================================="
 if [ $APPLY -eq 0 ]; then
-  echo "DRY-RUN only. Re-run with --apply to write the shared files."
+  echo "DRY-RUN only. Re-run with --apply to write the shared files"
+  echo "(add --full to also add beta-only files)."
+elif [ $FULL -eq 1 ]; then
+  echo "Folder fully aligned to $REF: shared files updated, extras preserved, beta-only files added."
 else
-  echo "Folder aligned to $REF for all shared files. Extras preserved."
+  echo "Folder aligned to $REF for all shared files. Extras preserved; no new files added."
 fi
