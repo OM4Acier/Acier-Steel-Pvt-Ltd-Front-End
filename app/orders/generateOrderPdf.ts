@@ -11,7 +11,7 @@
  *  • No external PDF library — works in every modern browser
  */
 
-import { Order } from './types';
+import { Order, TRANSPORT_PROVIDER_LABELS } from './types';
 import { PdfFieldVisibilityMap } from './pdfConfig';
 import { renderMarkdownText } from '@/components/markdownRenderer';
 
@@ -35,9 +35,10 @@ function formatPaymentStatus(val: string | undefined): string {
 }
 
 function formatTransportProvider(val: string | undefined, name: string | undefined): string {
-  if (val === 'client') return 'Client Transport';
+  if (!val) return 'N/A';
+  const label = TRANSPORT_PROVIDER_LABELS[val as keyof typeof TRANSPORT_PROVIDER_LABELS] ?? val;
   if (val === 'own') return `Own Transport${name ? ` (${name})` : ''}`;
-  return val || 'N/A';
+  return label;
 }
 
 function show(id: string, vis: PdfFieldVisibilityMap): boolean {

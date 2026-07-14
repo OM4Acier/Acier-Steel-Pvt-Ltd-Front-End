@@ -29,6 +29,11 @@ export interface UserProfile {
 export type CustomerPaymentStatus = 'regular' | 'new-paid' | 'new-unpaid';
 export type WeightScaleType = 'outside' | 'inside';
 export type TransportProvider = 'client' | 'poter' | 'own';
+export const TRANSPORT_PROVIDER_LABELS: Record<TransportProvider, string> = {
+  client: 'Client Transport',
+  poter: 'Poter',
+  own: 'Own Transport',
+};
 export type OrderStatus = 
   | 'Order Created'
   | 'Approved for Production'

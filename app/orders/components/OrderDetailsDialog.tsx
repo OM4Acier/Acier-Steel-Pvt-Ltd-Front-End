@@ -23,7 +23,7 @@ import {
   FileDown, Settings2,
 } from 'lucide-react';
 
-import { Order, EditHistoryEntry, DialogMessageType } from '../types';
+import { Order, EditHistoryEntry, DialogMessageType, TransportProvider, TRANSPORT_PROVIDER_LABELS } from '../types';
 import { ordersApi } from '@/lib/api/endpoints/ordersApi';
 const apiService = ordersApi;
 import { renderMarkdownText } from '@/components/markdownRenderer';
@@ -1255,7 +1255,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                   ) : (
                     <>
                       <div className="text-base font-medium text-gray-900 dark:text-white">
-                        {displayOrder?.details?.transportProvider ? (displayOrder.details.transportProvider === 'client' ? 'Client Transport' : 'Own Transport') : 'N/A'}
+                        {displayOrder?.details?.transportProvider ? TRANSPORT_PROVIDER_LABELS[displayOrder.details.transportProvider as TransportProvider] : 'N/A'}
                       </div>
                       {displayOrder?.details?.transportProvider === 'own' && displayOrder?.details?.transportProviderName && (
                         <div className="space-y-0.5 mt-1">
