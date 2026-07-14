@@ -768,10 +768,11 @@ const LeadFormDialog: React.FC<LeadFormDialogProps> = ({ isOpen, onOpenChange, o
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader><DialogTitle className="text-3xl font-extrabold text-blue-800 dark:text-blue-300">Create New Lead</DialogTitle></DialogHeader>
+      <DialogContent className="flex flex-col max-h-[90vh] sm:max-h-[85vh]">
+        <DialogHeader className="flex-shrink-0"><DialogTitle className="text-3xl font-extrabold text-blue-800 dark:text-blue-300">Create New Lead</DialogTitle></DialogHeader>
 
-        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-grow">
+          <div className="grid gap-4 py-4 overflow-y-auto flex-grow">
           {/* NEW COMPACT GRID 1: Client Name (2/3 width) and Hot Lead Toggle (1/3 width) */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2 sm:col-span-2">
@@ -875,7 +876,9 @@ const LeadFormDialog: React.FC<LeadFormDialogProps> = ({ isOpen, onOpenChange, o
             )}
           </div>
 
-          <DialogFooter><Button variant="outline" type="button" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button><Button type="submit" disabled={isSaving}>{isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}Create Lead</Button></DialogFooter>
+          </div>
+
+          <DialogFooter className="flex-shrink-0"><Button variant="outline" type="button" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button><Button type="submit" disabled={isSaving}>{isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}Create Lead</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

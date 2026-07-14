@@ -35,7 +35,7 @@ if (!PUBLISHABLE_KEY) {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY!} afterSignOutUrl="/">
+    <ClerkProvider telemetry={false} publishableKey={PUBLISHABLE_KEY!} afterSignOutUrl="/">
       <ClerkTokenProvider>
         <ThemeProvider
           attribute="class"
