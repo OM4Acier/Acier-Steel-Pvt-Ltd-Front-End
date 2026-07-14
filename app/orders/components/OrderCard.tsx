@@ -102,29 +102,34 @@ export const OrderCard: React.FC<OrderCardProps> = ({
       {/* CONTENT SECTION: Optimized for Dark Theme (Lighter BG, Unified Icon Color) */}
       <CardContent className="p-4 space-y-3 text-gray-800 dark:text-gray-200 dark:bg-gray-800">
         
-        {/* Client Detail Block */}
-        <div className="flex items-center text-base">
-          {/* Unified Icon Color: text-gray-500 dark:text-gray-400 */}
-          <UserIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" /> 
-          <span className="font-medium">Client: </span> {order.client}
-        </div>
+        {/* Client + Contact row with Poter banner on the right */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-3">
+            {/* Client Detail Block */}
+            <div className="flex items-center text-base">
+              {/* Unified Icon Color: text-gray-500 dark:text-gray-400 */}
+              <UserIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" /> 
+              <span className="font-medium">Client: </span> {order.client}
+            </div>
 
-        {/* Contact Detail Block */}
-        <div className="flex items-start text-base">
-          {/* Unified Icon Color: text-gray-500 dark:text-gray-400 */}
-          <Phone className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400 flex-shrink-0 mt-1" /> 
-          <span className="text-sm whitespace-pre-wrap">
-            <span className="font-medium">Contact: </span> {order.contactNo || 'N/A'}
-          </span>
-        </div>
-
-        {/* Poter Transport Indicator - inline highlight for 'poter' transport provider */}
-        {isPoter && (
-          <div className="flex items-center text-sm font-bold text-violet-700 dark:text-violet-300 mt-2 p-2 rounded-lg bg-violet-100 dark:bg-violet-950/40 border border-violet-500">
-            <Truck className="w-4 h-4 mr-2 flex-shrink-0 text-violet-600 dark:text-violet-400" />
-            <span>Poter Transport</span>
+            {/* Contact Detail Block */}
+            <div className="flex items-start text-base">
+              {/* Unified Icon Color: text-gray-500 dark:text-gray-400 */}
+              <Phone className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400 flex-shrink-0 mt-1" /> 
+              <span className="text-sm whitespace-pre-wrap">
+                <span className="font-medium">Contact: </span> {order.contactNo || 'N/A'}
+              </span>
+            </div>
           </div>
-        )}
+
+          {/* Poter Transport Banner - right side of client/contact */}
+          {isPoter && (
+            <div className="flex-shrink-0 flex items-center text-xs font-bold text-violet-700 dark:text-violet-300 p-2 rounded-lg bg-violet-100 dark:bg-violet-950/40 border border-violet-500 h-fit">
+              <Truck className="w-4 h-4 mr-2 flex-shrink-0 text-violet-600 dark:text-violet-400" />
+              <span>Poter Transport</span>
+            </div>
+          )}
+        </div>
 
         {/* Payment Warning Block - Bilingual support for operations role */}
         {order?.customerPaymentStatus === 'new-unpaid' && (
