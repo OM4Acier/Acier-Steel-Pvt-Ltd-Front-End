@@ -9,7 +9,6 @@ import {
   Clock,
   CheckCircle,
   Package,
-  Truck,
   XCircle,
   Zap, // Added Zap icon for High Priority
   AlertCircle, // Added AlertCircle for unpaid status
@@ -46,8 +45,17 @@ export const OrderCard: React.FC<OrderCardProps> = ({
     <Card
       onClick={() => setSelectedOrder(order)}
       // Card BG is set to dark:bg-gray-900 (slightly darker than content for separation)
-      className={`cursor-pointer transition-all duration-300 transform hover:-translate-y-1 rounded-xl overflow-hidden min-w-[280px] bg-white dark:bg-gray-900 ${cardStatusStyle}`}
+      className={`relative cursor-pointer transition-all duration-300 transform hover:-translate-y-1 rounded-xl overflow-hidden min-w-[280px] bg-white dark:bg-gray-900 ${cardStatusStyle}`}
     >
+      {/* Poter corner ribbon - diagonal flag at top-right */}
+      {isPoter && (
+        <div className="pointer-events-none absolute top-0 right-0 z-10">
+          <div className="absolute top-3 right-[-34px] rotate-45 bg-violet-600 text-white text-[10px] font-bold uppercase tracking-widest px-10 py-1 shadow-md shadow-violet-500/40">
+            Poter
+          </div>
+        </div>
+      )}
+
       {/* HEADER SECTION: Status (Left) and Badges (Right) */}
       <CardHeader
         className={`p-4 ${
@@ -85,24 +93,13 @@ export const OrderCard: React.FC<OrderCardProps> = ({
                 HIGH PRIORITY
             </span>
           )}
-
-          {/* Poter Transport Pill - violet highlight for 'poter' transport provider */}
-          {isPoter && (
-            <span
-              className="text-[10px] uppercase tracking-widest rounded-full px-3 py-1 shadow-md flex items-center 
-              bg-violet-600 text-white shadow-violet-500/50 dark:bg-violet-700 dark:shadow-violet-700/70"
-            >
-              <Truck className="w-3 h-3 mr-1" />
-              POTER
-            </span>
-          )}
         </div>
       </CardHeader>
       
       {/* CONTENT SECTION: Optimized for Dark Theme (Lighter BG, Unified Icon Color) */}
       <CardContent className="p-4 space-y-3 text-gray-800 dark:text-gray-200 dark:bg-gray-800">
-        
-        {/* Client + Contact row with Poter banner on the right */}
+
+        {/* Client + Contact row */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-3">
             {/* Client Detail Block */}
@@ -121,14 +118,6 @@ export const OrderCard: React.FC<OrderCardProps> = ({
               </span>
             </div>
           </div>
-
-          {/* Poter Transport Banner - right side of client/contact */}
-          {isPoter && (
-            <div className="flex-shrink-0 flex items-center text-xs font-bold text-violet-700 dark:text-violet-300 p-2 rounded-lg bg-violet-100 dark:bg-violet-950/40 border border-violet-500 h-fit">
-              <Truck className="w-4 h-4 mr-2 flex-shrink-0 text-violet-600 dark:text-violet-400" />
-              <span>Poter Transport</span>
-            </div>
-          )}
         </div>
 
         {/* Payment Warning Block - Bilingual support for operations role */}
