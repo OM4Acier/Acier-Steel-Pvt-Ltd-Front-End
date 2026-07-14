@@ -32,12 +32,15 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   statusIcons,
   userRole,
 }) => {
-  // Apply visual indication for High Priority and Payment Status
+  // Apply visual indication for High Priority, Payment Status, and Poter transport
+  const isPoter = order?.details?.transportProvider === 'poter';
   const cardStatusStyle = order.isHighPriority
     ? 'border-2 border-red-500 shadow-xl shadow-red-500/40'
     : order?.customerPaymentStatus === 'new-unpaid'
       ? 'border-2 border-amber-500 shadow-lg shadow-amber-500/30'
-      : 'border border-gray-300 dark:border-gray-600 hover:shadow-md';
+      : isPoter
+        ? 'border-2 border-violet-500 shadow-lg shadow-violet-500/30'
+        : 'border border-gray-300 dark:border-gray-600 hover:shadow-md';
 
   return (
     <Card
@@ -82,6 +85,17 @@ export const OrderCard: React.FC<OrderCardProps> = ({
                 HIGH PRIORITY
             </span>
           )}
+
+          {/* Poter Transport Pill - violet highlight for 'poter' transport provider */}
+          {isPoter && (
+            <span
+              className="text-[10px] uppercase tracking-widest rounded-full px-3 py-1 shadow-md flex items-center 
+              bg-violet-600 text-white shadow-violet-500/50 dark:bg-violet-700 dark:shadow-violet-700/70"
+            >
+              <Truck className="w-3 h-3 mr-1" />
+              POTER
+            </span>
+          )}
         </div>
       </CardHeader>
       
@@ -103,6 +117,14 @@ export const OrderCard: React.FC<OrderCardProps> = ({
             <span className="font-medium">Contact: </span> {order.contactNo || 'N/A'}
           </span>
         </div>
+
+        {/* Poter Transport Indicator - inline highlight for 'poter' transport provider */}
+        {isPoter && (
+          <div className="flex items-center text-sm font-bold text-violet-700 dark:text-violet-300 mt-2 p-2 rounded-lg bg-violet-100 dark:bg-violet-950/40 border border-violet-500">
+            <Truck className="w-4 h-4 mr-2 flex-shrink-0 text-violet-600 dark:text-violet-400" />
+            <span>Poter Transport</span>
+          </div>
+        )}
 
         {/* Payment Warning Block - Bilingual support for operations role */}
         {order?.customerPaymentStatus === 'new-unpaid' && (
