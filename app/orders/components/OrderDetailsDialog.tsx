@@ -1212,62 +1212,73 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                 </div>
 
                 {/* Transport Provider - Premium Sub-card */}
-                <div className="bg-teal-100 dark:bg-teal-900/30 p-4 rounded-lg shadow-lg border border-l-[10px] border-teal-600 dark:border-teal-500 flex flex-col justify-between">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Building className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                    <Label htmlFor="transportProvider" className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Transport Provider</Label>
+                {(() => {
+                  const isPoter = displayOrder?.details?.transportProvider === 'poter';
+                  const cardTone = isPoter
+                    ? 'bg-violet-100 dark:bg-violet-900/30 border-l-[10px] border-violet-600 dark:border-violet-500'
+                    : 'bg-teal-100 dark:bg-teal-900/30 border-l-[10px] border-teal-600 dark:border-teal-500';
+                  const iconTone = isPoter
+                    ? 'text-violet-600 dark:text-violet-400'
+                    : 'text-teal-600 dark:text-teal-400';
+                  return (
+                  <div className={`${cardTone} p-4 rounded-lg shadow-lg flex flex-col justify-between`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Building className={`w-5 h-5 ${iconTone}`} />
+                      <Label htmlFor="transportProvider" className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Transport Provider</Label>
+                    </div>
+                    {isEditMode && canEditOperationsSpecificFields(currentUserProfile?.role ?? null) ? (
+                      <>
+                        <Select
+                          onValueChange={(value) => setPendingChanges(prev => ({
+                            ...prev,
+                            textFields: {
+                              ...prev.textFields,
+                              details: { ...prev.textFields.details, transportProvider: value as any }
+                            },
+                            hasChanges: true,
+                          }))}
+                          value={displayOrder?.details?.transportProvider || ''}
+                        >
+                          <SelectTrigger className="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm">
+                            <SelectValue placeholder="Select Provider" />
+                          </SelectTrigger>
+                          <SelectContent className="z-[9050]">
+                            <SelectItem value="client">Client Transport</SelectItem>
+                            <SelectItem value="own">Own Transport</SelectItem>
+                            <SelectItem value="poter">Poter</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {displayOrder?.details?.transportProvider === 'own' && (
+                          <div className="space-y-1 mt-2">
+                            <Label htmlFor="transportProviderName" className="font-medium text-xs text-gray-700 dark:text-gray-300">Provider Name:</Label>
+                            <Input
+                              id="transportProviderName"
+                              value={displayOrder?.details?.transportProviderName || ''}
+                              onChange={handleTextChange}
+                              placeholder="Enter provider name"
+                              className="bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 h-8 text-sm"
+                            />
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-base font-medium text-gray-900 dark:text-white">
+                          {displayOrder?.details?.transportProvider ? TRANSPORT_PROVIDER_LABELS[displayOrder.details.transportProvider as TransportProvider] : 'N/A'}
+                        </div>
+                        {displayOrder?.details?.transportProvider === 'own' && displayOrder?.details?.transportProviderName && (
+                          <div className="space-y-0.5 mt-1">
+                            <Label className="font-medium text-xs text-gray-500 dark:text-gray-400">Provider Name:</Label>
+                            <p className="text-base font-bold text-fuchsia-800 dark:text-fuchsia-200">
+                              {displayOrder.details.transportProviderName}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
-                  {isEditMode && canEditOperationsSpecificFields(currentUserProfile?.role ?? null) ? (
-                    <>
-                      <Select
-                        onValueChange={(value) => setPendingChanges(prev => ({
-                          ...prev,
-                          textFields: {
-                            ...prev.textFields,
-                            details: { ...prev.textFields.details, transportProvider: value as any }
-                          },
-                          hasChanges: true,
-                        }))}
-                        value={displayOrder?.details?.transportProvider || ''}
-                      >
-                        <SelectTrigger className="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm">
-                          <SelectValue placeholder="Select Provider" />
-                        </SelectTrigger>
-                        <SelectContent className="z-[9050]">
-                          <SelectItem value="client">Client Transport</SelectItem>
-                          <SelectItem value="own">Own Transport</SelectItem>
-                          <SelectItem value="poter">Poter</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {displayOrder?.details?.transportProvider === 'own' && (
-                        <div className="space-y-1 mt-2">
-                          <Label htmlFor="transportProviderName" className="font-medium text-xs text-gray-700 dark:text-gray-300">Provider Name:</Label>
-                          <Input
-                            id="transportProviderName"
-                            value={displayOrder?.details?.transportProviderName || ''}
-                            onChange={handleTextChange}
-                            placeholder="Enter provider name"
-                            className="bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 h-8 text-sm"
-                          />
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-base font-medium text-gray-900 dark:text-white">
-                        {displayOrder?.details?.transportProvider ? TRANSPORT_PROVIDER_LABELS[displayOrder.details.transportProvider as TransportProvider] : 'N/A'}
-                      </div>
-                      {displayOrder?.details?.transportProvider === 'own' && displayOrder?.details?.transportProviderName && (
-                        <div className="space-y-0.5 mt-1">
-                          <Label className="font-medium text-xs text-gray-500 dark:text-gray-400">Provider Name:</Label>
-                          <p className="text-base font-bold text-fuchsia-800 dark:text-fuchsia-200">
-                            {displayOrder.details.transportProviderName}
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
 
               {/* Secondary Details Section (Vehicle No & Site Info) */}
