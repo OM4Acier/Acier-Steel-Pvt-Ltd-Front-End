@@ -9,6 +9,7 @@ import {
   Clock,
   CheckCircle,
   Package,
+  Truck,
   XCircle,
   Zap, // Added Zap icon for High Priority
   AlertCircle, // Added AlertCircle for unpaid status
@@ -133,6 +134,54 @@ export const OrderCard: React.FC<OrderCardProps> = ({
           </div>
         )}
       </CardContent>
+      <CardContent className="space-y-4 p-4 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+
+  {/* Transport Badge */}
+  {isPoter && (
+    <div className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300">
+      <Truck className="h-4 w-4" />
+      <span>Poter Transport</span>
+    </div>
+  )}
+
+  {/* Client + Contact */}
+  <div className="space-y-3">
+    <div className="flex items-center text-base">
+      <UserIcon className="mr-3 h-5 w-5 text-gray-500 dark:text-gray-400" />
+      <span className="font-medium">Client:</span>
+      <span className="ml-2">{order.client}</span>
+    </div>
+
+    <div className="flex items-start text-base">
+      <Phone className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+      <div className="min-w-0">
+        <span className="font-medium">Contact:</span>
+        <span className="ml-2 break-words">
+          {order.contactNo || "N/A"}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  {/* Payment Warning */}
+  {order?.customerPaymentStatus === "new-unpaid" && (
+    <div className="flex items-center rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+      <AlertCircle className="mr-3 h-5 w-5 flex-shrink-0" />
+
+      <div className="leading-tight">
+        <div className="text-xs font-semibold uppercase tracking-wider">
+          Unpaid Order
+        </div>
+
+        {userRole === "operations" && (
+          <div className="mt-0.5 text-sm font-medium">
+            भुगतान लंबित है
+          </div>
+        )}
+      </div>
+    </div>
+  )}
+</CardContent>
     </Card>
   );
 };
