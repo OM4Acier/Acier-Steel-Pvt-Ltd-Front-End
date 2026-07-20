@@ -66,6 +66,13 @@ export const canEditInvoiceNumberField = (
   return isSuperAdmin(role) || (isAccountant(role) && orderStatus === 'Dispatched and Invoiced');
 };
 
+export const canEditInvoiceIssueDateField = (
+  role: UserRole | null,
+  orderStatus: OrderStatus | undefined
+): boolean => {
+  return isSuperAdmin(role) || (isAccountant(role) && orderStatus === 'Dispatched and Invoiced');
+};
+
 // Action Permissions
 export const canApproveOrder = (role: UserRole | null): boolean => {
   return isSuperAdmin(role);

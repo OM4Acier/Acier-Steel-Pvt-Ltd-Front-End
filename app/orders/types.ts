@@ -49,6 +49,7 @@ export interface OrderDetails {
   transportProvider?: TransportProvider;
   transportProviderName?: string;
   orderDate?: string;
+  invoiceIssueDate?: string;
   invoiceDetails?: string;
   vehicleNo?: string;
   invoiceNo?: string;

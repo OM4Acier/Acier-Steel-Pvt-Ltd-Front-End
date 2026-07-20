@@ -101,9 +101,10 @@ export const ordersApi = {
   updateOrderStatus: async (
     deoNo: string,
     newStatus: string,
-    editHistory: EditHistoryEntry
+    editHistory: EditHistoryEntry,
+    extra?: Record<string, unknown>
   ): Promise<Order> => {
-    const updatedOrder = await apiClient.put<any>(`/orders/${deoNo}`, { status: newStatus, editHistory });
+    const updatedOrder = await apiClient.put<any>(`/orders/${deoNo}`, { status: newStatus, editHistory, ...extra });
     if (!updatedOrder) throw new Error('Request cancelled');
     return { ...updatedOrder, id: updatedOrder._id };
   },
