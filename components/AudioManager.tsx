@@ -460,4 +460,4 @@ const AudioManager: React.FC<AudioManagerProps> = ({
   );
 };
 
-export default AudioManager;
+export default React.memo(AudioManager);

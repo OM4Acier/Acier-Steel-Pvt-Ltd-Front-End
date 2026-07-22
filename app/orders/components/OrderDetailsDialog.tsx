@@ -8,42 +8,32 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import {
-  Loader2, Edit, User as UserIcon, Phone, MessageCircle, Calendar,
-  File, Truck, DollarSign, Package, Eye, Trash2, Upload, X,
-  ChevronDown, ChevronUp, History, CheckCircle, XCircle,
-  MoreVertical, Wallet, Zap, Save,
-  Building, Gauge,
-  FileDown, Settings2,
+  Loader2, Zap, Save, FileDown, Settings2, Trash2,
 } from 'lucide-react';
 
-import { Order, EditHistoryEntry, DialogMessageType, TransportProvider, TRANSPORT_PROVIDER_LABELS } from '../types';
+import { Order, EditHistoryEntry, DialogMessageType } from '../types';
 import { ordersApi } from '@/lib/api/endpoints/ordersApi';
 const apiService = ordersApi;
-import { renderMarkdownText } from '@/components/markdownRenderer';
-import { formatContactNumberForWhatsApp, handleDragOver, handleDragLeave, handleDrop } from '../fileUtils';
 import {
-  canEditSalesSpecificFields, canEditOperationsSpecificFields,
-  canEditAccountantSpecificFields, canEditInvoiceDetailsField,
-  canEditInvoiceNumberField, canEditVehicleNoField,
-  canMarkAsPaid, canCreatePartDelivery, canCancelOrder,
-  isSuperAdmin, isOperations, isAccountant, isSales,
+  canEditSalesSpecificFields,
+  canEditOperationsSpecificFields,
+  canEditAccountantSpecificFields,
   canEditSiteInfo,
+  canMarkAsPaid, canCreatePartDelivery,
+  isSuperAdmin, isOperations,
   canExportPdf, canConfigurePdf,
 } from '../permissions';
-import { PAYMENT_STATUS_COLORS, STATUS_COLORS, canTransitionToGeneral } from '../constants';
+import { canTransitionToGeneral } from '../constants';
 
 import { processFilesToPdf, pdfBytesToFile, formatFileSize } from '@/lib/utils/pdfMergeUtils';
-import AudioManager from '@/components/AudioManager';
 import { fileApi } from '@/lib/api/endpoints/fileApi';
-import { RichTextarea } from '@/components/RichTextarea';
-import EditHistory from './EditHistory';
+import ClientStatusCard from './cards/ClientStatusCard';
+import DeliveryVehicleCard from './cards/DeliveryVehicleCard';
+import ProductDetailsCard from './cards/ProductDetailsCard';
+import InvoiceDetailsCard from './cards/InvoiceDetailsCard';
+import OrderActionsFooter from './cards/OrderActionsFooter';
 
 // PDF utilities
 import {
@@ -55,6 +45,30 @@ import { openOrderPdfInNewTab } from '../generateOrderPdf';
 import { PdfConfigModal } from './PdfConfigModal';
 import { UserProfile } from '@/types/rbac.types';
 
+// Formats a Date/timestamp to a local `YYYY-MM-DD` string (avoids UTC off-by-one near midnight).
+const toLocalISODate = (value: string | Date): string => {
+  const d = typeof value === 'string' ? new Date(value) : value;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+// Invoice issue date is only allowed for today and the previous day (local calendar day).
+// Returns ISO `YYYY-MM-DD` strings formatted from local date components.
+const getInvoiceIssueDateBounds = (): { min: string; max: string } => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const fmt = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  return { min: fmt(yesterday), max: fmt(today) };
+};
 
 interface OrderDetailsDialogProps {
   isOpen: boolean;
@@ -246,7 +260,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
 
           // Audio files don't need PDF processing
           if (upload.stage === 'productVoiceNote' || upload.stage === 'invoiceVoiceNote') {
-          
+
             await fileApi.uploadFiles(
               currentOrder.deoNo,
               upload.files,
@@ -371,6 +385,9 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     if (changes.details?.invoiceNo && changes.details.invoiceNo !== original.details?.invoiceNo) {
       descriptions.push(`Invoice No. to '${changes.details.invoiceNo}'`);
     }
+    if (changes.details?.invoiceIssueDate && changes.details.invoiceIssueDate !== original.details?.invoiceIssueDate) {
+      descriptions.push(`Invoice issue date to '${changes.details.invoiceIssueDate}'`);
+    }
 
     return descriptions.length > 0
       ? `Updated: ${descriptions.join(', ')}`
@@ -398,6 +415,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       if (changes.details.invoiceDetails !== undefined) payload.details.invoiceDetails = changes.details.invoiceDetails;
       if (changes.details.vehicleNo !== undefined) payload.details.vehicleNo = changes.details.vehicleNo;
       if (changes.details.invoiceNo !== undefined) payload.details.invoiceNo = changes.details.invoiceNo;
+      if (changes.details.invoiceIssueDate !== undefined) payload.details.invoiceIssueDate = changes.details.invoiceIssueDate;
       if (changes.details.siteDeliveryInfo !== undefined) payload.details.siteDeliveryInfo = changes.details.siteDeliveryInfo;
       if (changes.details.weightScaleType) payload.details.weightScaleType = changes.details.weightScaleType;
       if (changes.details.transportProvider) payload.details.transportProvider = changes.details.transportProvider;
@@ -412,7 +430,12 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     const { id, value } = e.target;
 
     setPendingChanges(prev => {
-      const isDetailsField = currentOrder?.details && id in currentOrder.details;
+      // invoiceIssueDate is a details field per the OrderDetails type, but the
+      // backend omits it on existing orders — so `id in currentOrder.details`
+      // returns false and the edit lands on the top-level textFields instead of
+      // .details, leaving the input value stale. Force it into details.
+      const isDetailsField =
+        (currentOrder?.details && id in currentOrder.details) || id === 'invoiceIssueDate';
 
       if (isDetailsField) {
         return {
@@ -560,8 +583,70 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     });
   };
 
+  // Stable callbacks passed to extracted card components — see block below.
 
-  const handleDeleteUploadedFile = async (fileId: string, stage: 'product' | 'vehicle' | 'invoice') => {
+  const handleProductAudioStaged = useCallback(
+    (files: File[]) => handleAudioFileAdd(files, 'product'),
+    []
+  );
+  const handleProductAudioRemoved = useCallback(
+    (index: number) => handleAudioFileRemove(index, 'product'),
+    []
+  );
+  const handleInvoiceAudioStaged = useCallback(
+    (files: File[]) => handleAudioFileAdd(files, 'invoice'),
+    []
+  );
+  const handleInvoiceAudioRemoved = useCallback(
+    (index: number) => handleAudioFileRemove(index, 'invoice'),
+    []
+  );
+
+  // ── Stable callbacks passed to extracted card components ──────────────
+  // Wrapping these in useCallback keeps their identity stable so React.memo
+  // on the cards actually isolates re-renders (inline arrows would defeat it).
+  const onTextChange = useCallback(handleTextChange, []);
+  const onPaymentStatusChange = useCallback(handlePaymentStatusChange, []);
+  const onPartDeliveryChange = useCallback(handlePartDeliveryChange, []);
+  const onHighPriorityChange = useCallback(handleHighPriorityChange, []);
+  const onStatusSelectChange = useCallback(
+    (value: string) => setPendingChanges(prev => ({
+      ...prev,
+      textFields: { ...prev.textFields, status: value as any },
+      hasChanges: true,
+    })),
+    []
+  );
+  const onWeightScaleChange = useCallback(
+    (value: string) => setPendingChanges(prev => ({
+      ...prev,
+      textFields: { ...prev.textFields, details: { ...prev.textFields.details, weightScaleType: value as any } },
+      hasChanges: true,
+    })),
+    []
+  );
+  const onTransportProviderChange = useCallback(
+    (value: string) => setPendingChanges(prev => ({
+      ...prev,
+      textFields: { ...prev.textFields, details: { ...prev.textFields.details, transportProvider: value as any } },
+      hasChanges: true,
+    })),
+    []
+  );
+  const onVehicleFileAdd = useCallback((files: File[]) => handleFileAdd(files, 'vehicle'), []);
+  const onVehicleFileRemove = useCallback((i: number) => handleFileRemove(i, 'vehicle'), []);
+  const onProductFileAdd = useCallback((files: File[]) => handleFileAdd(files, 'product'), []);
+  const onProductFileRemove = useCallback((i: number) => handleFileRemove(i, 'product'), []);
+  const onInvoiceFileAdd = useCallback((files: File[]) => handleFileAdd(files, 'invoice'), []);
+  const onInvoiceFileRemove = useCallback((i: number) => handleFileRemove(i, 'invoice'), []);
+  const onAdditionalInfoToggle = useCallback(() => setAdditionalInfoOpen(o => !o), []);
+  const onVehicleSectionToggle = useCallback(() => setVehicleSectionOpen(o => !o), []);
+  const onProductSectionToggle = useCallback(() => setProductSectionOpen(o => !o), []);
+  const onInvoiceSectionToggle = useCallback(() => setInvoiceSectionOpen(o => !o), []);
+  const onEditOrder = useCallback(() => setIsEditMode(true), []);
+  const onDeleteClick = useCallback(() => { setIsMoreActionsOpen(false); setIsConfirmDeleteDialogOpen(true); }, []);
+
+  const handleDeleteUploadedFile = useCallback(async (fileId: string, stage: 'product' | 'vehicle' | 'invoice') => {
     if (!currentUserProfile || !currentOrder) {
       onShowMessage({ type: 'error', text: 'Please log in to delete files.' });
       return;
@@ -618,10 +703,10 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
         : `Delete failed: ${e.message}`;
       onShowMessage({ type: 'error', text: errorMessage });
     }
-  };
+  }, [currentUserProfile, currentOrder, onShowMessage, apiService]);
 
   // ============= STATUS HANDLERS =============
-  const handleUpdateOrderStatus = async (newStatus: string) => {
+  const handleUpdateOrderStatus = useCallback(async (newStatus: string) => {
     if (!currentUserProfile || !currentOrder) {
       onShowMessage({ type: 'error', text: 'Please log in to update status.' });
       return;
@@ -647,6 +732,20 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
         onShowMessage({ type: 'error', text: 'Invoice No. and Invoice File required.' });
         return;
       }
+      if (!currentOrder.details?.invoiceIssueDate || currentOrder.details.invoiceIssueDate.trim() === '') {
+        onShowMessage({ type: 'error', text: 'Invoice Issue Date is required before marking the order Completed.' });
+        return;
+      }
+      // Restrict to today and the previous day (local calendar day).
+      const { min, max } = getInvoiceIssueDateBounds();
+      const issueDate = toLocalISODate(currentOrder.details.invoiceIssueDate);
+      if (issueDate < min || issueDate > max) {
+        onShowMessage({
+          type: 'error',
+          text: 'Invoice Issue Date must be today or yesterday.',
+        });
+        return;
+      }
     }
 
     if (!canTransitionToGeneral(currentOrder.status || '', newStatus)) {
@@ -663,7 +762,10 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     };
 
     try {
-      await apiService.updateOrderStatus(currentOrder.deoNo, newStatus, historyEntry);
+      const extra = newStatus === 'Completed'
+        ? { details: { invoiceIssueDate: currentOrder.details?.invoiceIssueDate } }
+        : undefined;
+      await apiService.updateOrderStatus(currentOrder.deoNo, newStatus, historyEntry, extra);
       onOrderUpdated();
       onClose();
       onShowMessage({ type: 'success', text: `Status updated to ${newStatus}!` });
@@ -676,7 +778,14 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [currentUserProfile, currentOrder, onShowMessage, onOrderUpdated, onClose, apiService, canTransitionToGeneral]);
+
+  // Stable status-action wrappers for the footer (keep memo isolation).
+  const onApprove = useCallback(() => handleUpdateOrderStatus('Approved for Production'), [handleUpdateOrderStatus]);
+  const onReadyForDispatch = useCallback(() => handleUpdateOrderStatus('Ready for Dispatch'), [handleUpdateOrderStatus]);
+  const onDispatchedInvoiced = useCallback(() => handleUpdateOrderStatus('Dispatched and Invoiced'), [handleUpdateOrderStatus]);
+  const onComplete = useCallback(() => handleUpdateOrderStatus('Completed'), [handleUpdateOrderStatus]);
+  const onCancelOrder = useCallback(() => handleUpdateOrderStatus('Cancelled'), [handleUpdateOrderStatus]);
 
   // ============= PDF EXPORT HANDLERS ============
   const handleExportPdf = useCallback(() => {
@@ -817,1185 +926,304 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     }
   };
 
+  // Handle upload complete - refetch task data
+  const handleUploadComplete = useCallback(async () => {
+    await onOrderUpdated();
+  }, [onOrderUpdated]);
+
   if (!order || !currentOrder) return null;
   const isPaymentPending =
     displayOrder?.customerPaymentStatus === "new-unpaid" &&
     displayOrder?.status === "Ready for Dispatch";
 
-  const isButtonDisabled = isSaving || isPaymentPending;
 
 
 
-
-  // Handle upload complete - refetch task data
-  const handleUploadComplete = async () => {
-    await onOrderUpdated();
-  };
 
   if (!currentUserProfile) {
     return null; // Loading screen is handled by LoadingContext
   }
 
   // 1. Logic for Operations role and specific payment status
-  const isOpsUnpaidWarning = 
-    isOperations(currentUserProfile?.role ?? null) && 
+  const isOpsUnpaidWarning =
+    isOperations(currentUserProfile?.role ?? null) &&
     displayOrder?.customerPaymentStatus === 'new-unpaid';
 
   // 2. Determine background colour based on role and status
-  const dialogBackgroundClass = isOpsUnpaidWarning 
+  const dialogBackgroundClass = isOpsUnpaidWarning
     ? 'bg-gradient-to-br from-red-100 via-red-50 to-red-100 dark:from-red-950 dark:via-gray-800 dark:to-red-950 shadow-[inset_0_0_50px_rgba(220,38,38,0.2)]'
     : (displayOrder ? (paymentStatusGradients[displayOrder.customerPaymentStatus] || 'bg-white dark:bg-gray-800') : 'bg-white dark:bg-gray-800');
-    
+
   // ============= RENDER =============
   return (
     <>
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!open) {
-        onClose();         // your close handler
-        onOrderUpdated(); // your custom function
-      }
-    }}>
-      <DialogContent
-        className={`sm:max-w-[800px] md:max-w-[1400px] p-2 md:p-4 rounded-xl shadow-2xl overflow-y-auto max-h-[80vh] md:max-h-[90vh] z-[9000] dialog-custom-scrollbar ${dialogBackgroundClass}'
+      <Dialog open={isOpen} onOpenChange={(open) => {
+        if (!open) {
+          onClose();         // your close handler
+          onOrderUpdated(); // your custom function
+        }
+      }}>
+        <DialogContent
+          className={`sm:max-w-[800px] md:max-w-[1400px] p-2 md:p-4 rounded-xl shadow-2xl overflow-y-auto max-h-[80vh] md:max-h-[90vh] z-[9000] dialog-custom-scrollbar ${dialogBackgroundClass}'
           }`}
-      >
+        >
 
-        {/* 3. Flashing "PAYMENT NOT COMPLETED" Warning */}
-        {isOpsUnpaidWarning && (
-          <div className="sticky top-0 z-[9010] w-full mb-4 px-2">
-            <div className="bg-red-600 text-white py-4 rounded-lg text-center animate-pulse shadow-2xl border-4 border-red-400">
-              <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase">
-                PAYMENT NOT COMPLETED
-              </h2>
-              <p className="text-sm font-bold opacity-90 mt-1">OPERATIONS ALERT: CHECK PAYMENT STATUS BEFORE PROCEEDING</p>
-            </div>
-          </div>
-        )}
-        <DialogHeader>
-          <div className="flex items-start justify-between gap-2">
-            <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3 flex-wrap">
-              {isEditMode ? `Edit Order - ${currentOrder.deoNo}` : `Order Details - ${currentOrder.deoNo}`}
-              {displayOrder?.isHighPriority && (
-                <span className="text-[10px] uppercase tracking-widest rounded-full px-3 py-1 shadow-xl transition-transform duration-300 transform hover:scale-[1.03] flex items-center bg-red-600 text-white shadow-red-500/50">
-                  <Zap className="w-3 h-3 mr-1 fill-white" />
-                  HIGH PRIORITY
-                </span>
-              )}
-              {isEditMode && pendingChanges.hasChanges && (
-                <Badge className="bg-orange-500 text-white animate-pulse">
-                  <Save className="w-3 h-3 mr-1" />
-                  Unsaved Changes
-                </Badge>
-              )}
-            </DialogTitle>
-
-            {/* ── PDF Export Actions ─────────────────────────── */}
-            {canExportPdf(currentUserProfile.role) && !isEditMode && (
-              <div className="flex items-center gap-1.5 shrink-0 pt-0.5 mr-5">
-                {canConfigurePdf(currentUserProfile.role) && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Configure PDF fields"
-                    onClick={() => setIsPdfConfigOpen(true)}
-                    className="h-8 w-8 text-gray-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950 rounded-lg"
-                  >
-                    <Settings2 className="w-4 h-4" />
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  onClick={handleExportPdf}
-                  className="h-8 px-3 bg-slate-800 hover:bg-slate-700 text-white text-xs gap-1.5 rounded-lg shadow"
-                  title="Export order as PDF (opens in new tab)"
-                >
-                  <FileDown className="w-3.5 h-3.5" />
-                  Export PDF
-                </Button>
+          {/* 3. Flashing "PAYMENT NOT COMPLETED" Warning */}
+          {isOpsUnpaidWarning && (
+            <div className="sticky top-0 z-[9010] w-full mb-4 px-2">
+              <div className="bg-red-600 text-white py-4 rounded-lg text-center animate-pulse shadow-2xl border-4 border-red-400">
+                <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase">
+                  PAYMENT NOT COMPLETED
+                </h2>
+                <p className="text-sm font-bold opacity-90 mt-1">OPERATIONS ALERT: CHECK PAYMENT STATUS BEFORE PROCEEDING</p>
               </div>
-            )}
-          </div>
-          <DialogDescription className="text-gray-600 dark:text-gray-400 mt-1">
-            {isEditMode ? 'Make changes and click Save All to apply.' : 'Comprehensive order information.'}
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* MAIN CONTENT - Two Column Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-          {/* LEFT COLUMN */}
-          <div className="space-y-6">
-            {/* Client & Status Card */}
-            <div className="bg-white dark:bg-gray-900 p-4 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 space-y-3">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2">
-                Client & Status
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Client */}
-                <div className="space-y-1">
-                  <Label htmlFor="client" className="font-medium flex items-center gap-1 text-sm">
-                    <UserIcon className="w-4 h-4 text-gray-500" /> Client:
-                  </Label>
-                  {isEditMode && canEditSalesSpecificFields(currentUserProfile?.role ?? null) ? (
-                    <Input id="client" value={displayOrder?.client || ''} onChange={handleTextChange} className="w-full h-9" />
-                  ) : (
-                    <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 text-sm">
-                      {displayOrder?.client}
-                    </span>
-                  )}
-                </div>
-
-                {/* Contact */}
-                <div className="space-y-1">
-                  <Label htmlFor="contactNo" className="font-medium flex items-center gap-1 text-sm">
-                    <Phone className="w-4 h-4 text-gray-500" /> Contact:
-                  </Label>
-                  {isEditMode && canEditSalesSpecificFields(currentUserProfile?.role ?? null) ? (
-                    <>
-                      <Input
-                        id="contactNo"
-                        value={displayOrder?.contactNo || ''}
-                        onChange={handleTextChange}
-                        type="tel"
-                        maxLength={10}
-                        className="w-full h-9"
-                      />
-                      {displayOrder?.contactNo && (
-                        <div className="flex gap-2 mt-1">
-                          <Button variant="outline" size="sm" onClick={() => window.open(`tel:${displayOrder.contactNo}`, '_blank')} className="flex-1 h-8">
-                            <Phone className="w-3 h-3 mr-1" /> Call
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => window.open(`https://wa.me/${formatContactNumberForWhatsApp(displayOrder.contactNo)}`, '_blank')} className="flex-1 text-green-600 border-green-300 hover:bg-green-50 h-8">
-                            <MessageCircle className="w-3 h-3 mr-1" /> WhatsApp
-                          </Button>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 text-sm">
-                        {displayOrder?.contactNo || 'N/A'}
-                      </span>
-                      {displayOrder?.contactNo && (
-                        <div className="flex gap-2 mt-1">
-                          <Button variant="outline" size="sm" onClick={() => window.open(`tel:${displayOrder.contactNo}`, '_blank')} className="flex-1 h-8">
-                            <Phone className="w-3 h-3 mr-1" /> Call
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => window.open(`https://wa.me/${formatContactNumberForWhatsApp(displayOrder.contactNo)}`, '_blank')} className="flex-1 text-green-600 border-green-300 hover:bg-green-50 h-8">
-                            <MessageCircle className="w-3 h-3 mr-1" /> WhatsApp
-                          </Button>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Org Contact */}
-                <div className="space-y-1">
-                  <Label className="font-medium flex items-center gap-1 text-sm">
-                    <UserIcon className="w-4 h-4 text-gray-500" /> Org. Contact:
-                  </Label>
-                  <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 text-sm">
-                    {displayOrder?.organizationContact || 'N/A'}
+            </div>
+          )}
+          <DialogHeader>
+            <div className="flex items-start justify-between gap-2">
+              <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3 flex-wrap">
+                {isEditMode ? `Edit Order - ${currentOrder.deoNo}` : `Order Details - ${currentOrder.deoNo}`}
+                {displayOrder?.isHighPriority && (
+                  <span className="text-[10px] uppercase tracking-widest rounded-full px-3 py-1 shadow-xl transition-transform duration-300 transform hover:scale-[1.03] flex items-center bg-red-600 text-white shadow-red-500/50">
+                    <Zap className="w-3 h-3 mr-1 fill-white" />
+                    HIGH PRIORITY
                   </span>
-                </div>
+                )}
+                {isEditMode && pendingChanges.hasChanges && (
+                  <Badge className="bg-orange-500 text-white animate-pulse">
+                    <Save className="w-3 h-3 mr-1" />
+                    Unsaved Changes
+                  </Badge>
+                )}
+              </DialogTitle>
 
-                {/* Part Delivery */}
-                <div className="space-y-1">
-                  <Label htmlFor="partDelivery" className="font-medium flex items-center gap-1 text-sm">
-                    <Package className="w-4 h-4 text-gray-500" /> Part Delivery:
-                  </Label>
-                  {isEditMode && canEditOperationsSpecificFields(currentUserProfile?.role ?? null) ? (
-                    <div className="flex items-center space-x-2 h-[36px]">
-                      <Checkbox
-                        id="partDelivery"
-                        checked={displayOrder?.partDelivery || false}
-                        onCheckedChange={handlePartDeliveryChange}
-                      />
-                      <Label htmlFor="partDelivery" className="font-normal text-sm">Enable Part Delivery</Label>
-                    </div>
-                  ) : (
-                    <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 h-[36px] flex items-center text-sm">
-                      {displayOrder?.partDelivery ? 'Yes' : 'No'}
-                    </span>
+              {/* ── PDF Export Actions ─────────────────────────── */}
+              {canExportPdf(currentUserProfile.role) && !isEditMode && (
+                <div className="flex items-center gap-1.5 shrink-0 pt-0.5 mr-5">
+                  {canConfigurePdf(currentUserProfile.role) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Configure PDF fields"
+                      onClick={() => setIsPdfConfigOpen(true)}
+                      className="h-8 w-8 text-gray-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950 rounded-lg"
+                    >
+                      <Settings2 className="w-4 h-4" />
+                    </Button>
                   )}
-                </div>
-
-              </div>
-
-              {/* Collapsible section for non-ops */}
-              {isOperations(currentUserProfile?.role ?? null) ? (
-                <div className="pt-3 border-t dark:border-gray-700">
-                  <div
-                    className="flex justify-between items-center cursor-pointer"
-                    onClick={() => setAdditionalInfoOpen(!isAdditionalInfoOpen)}
+                  <Button
+                    size="sm"
+                    onClick={handleExportPdf}
+                    className="h-8 px-3 bg-slate-800 hover:bg-slate-700 text-white text-xs gap-1.5 rounded-lg shadow"
+                    title="Export order as PDF (opens in new tab)"
                   >
-                    <h4 className="font-semibold text-gray-800 dark:text-white text-sm">Additional Info</h4>
-                    {isAdditionalInfoOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </div>
-                  <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isAdditionalInfoOpen ? 'max-h-screen mt-3' : 'max-h-0'}`}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label className="font-medium flex items-center gap-1 text-sm">
-                          <Calendar className="w-4 h-4 text-gray-500" /> Order Date:
-                        </Label>
-                        <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 text-sm">
-                          {displayOrder?.details?.orderDate || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="isHighPriority" className="font-medium flex items-center gap-1 text-sm">
-                          <Zap className="w-4 h-4 text-gray-500" /> High Priority:
-                        </Label>
-                        {isEditMode && canEditSalesSpecificFields(currentUserProfile?.role ?? null) ? (
-                          <div className="flex items-center space-x-2 h-[36px]">
-                            <Switch
-                              id="isHighPriority"
-                              checked={displayOrder?.isHighPriority || false}
-                              onCheckedChange={handleHighPriorityChange}
-                            />
-                            <Label htmlFor="isHighPriority" className="font-normal text-sm">
-                              {displayOrder?.isHighPriority ? 'Enabled' : 'Disabled'}
-                            </Label>
-                          </div>
-                        ) : (
-                          <span className={`text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 h-[36px] flex items-center text-sm ${displayOrder?.isHighPriority ? 'text-red-500 font-bold' : ''}`}>
-                            {displayOrder?.isHighPriority ? 'Yes' : 'No'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t dark:border-gray-700">
-                  <div className="space-y-1">
-                    <Label className="font-medium flex items-center gap-1 text-sm">
-                      <Calendar className="w-4 h-4 text-gray-500" /> Order Date:
-                    </Label>
-                    <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 text-sm">
-                      {displayOrder?.details?.orderDate || 'N/A'}
-                    </span>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="isHighPriority" className="font-medium flex items-center gap-1 text-sm">
-                      <Zap className="w-4 h-4 text-gray-500" /> High Priority:
-                    </Label>
-                    {isEditMode && canEditSalesSpecificFields(currentUserProfile?.role ?? null) ? (
-                      <div className="flex items-center space-x-2 h-[36px]">
-                        <Switch
-                          id="isHighPriority"
-                          checked={displayOrder?.isHighPriority || false}
-                          onCheckedChange={handleHighPriorityChange}
-                        />
-                        <Label htmlFor="isHighPriority" className="font-normal text-sm">
-                          {displayOrder?.isHighPriority ? 'Enabled' : 'Disabled'}
-                        </Label>
-                      </div>
-                    ) : (
-                      <span className={`text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 h-[36px] flex items-center text-sm ${displayOrder?.isHighPriority ? 'text-red-500 font-bold' : ''}`}>
-                        {displayOrder?.isHighPriority ? 'Yes' : 'No'}
-                      </span>
-                    )}
-                  </div>
+                    <FileDown className="w-3.5 h-3.5" />
+                    Export PDF
+                  </Button>
                 </div>
               )}
-
-              {/* Payment Status & Order Status */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t dark:border-gray-700">
-                <div className="space-y-1">
-                  <Label htmlFor="customerPaymentStatus" className="font-medium flex items-center gap-1 text-sm">
-                    <DollarSign className="w-4 h-4 text-gray-500" /> Payment:
-                  </Label>
-                  {isEditMode && canEditSalesSpecificFields(currentUserProfile?.role ?? null) ? (
-                    <Select onValueChange={handlePaymentStatusChange} value={displayOrder?.customerPaymentStatus || ''}>
-                      <SelectTrigger id="customerPaymentStatus" className="w-full h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="z-[9050]">
-                        <SelectItem value="regular">Regular</SelectItem>
-                        <SelectItem value="new-paid">New Customer - Paid</SelectItem>
-                        <SelectItem value="new-unpaid">New Customer - Unpaid</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Badge
-                      className={`${PAYMENT_STATUS_COLORS[displayOrder?.customerPaymentStatus ?? '']} font-medium p-2 text-xs`}
-                    >
-                      {displayOrder?.customerPaymentStatus === 'new-paid'
-                        ? 'New - Paid'
-                        : displayOrder?.customerPaymentStatus === 'new-unpaid'
-                          ? 'New - Unpaid'
-                          : 'Regular'}
-                    </Badge>
-
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="font-medium flex items-center gap-1 text-sm">
-                    <History className="w-4 h-4 text-gray-500" /> Status:
-                  </Label>
-                  {isEditMode && isSuperAdmin(currentUserProfile?.role ?? null) ? (
-                    <Select
-                      onValueChange={(value) => setPendingChanges(prev => ({
-                        ...prev,
-                        textFields: { ...prev.textFields, status: value as any },
-                        hasChanges: true,
-                      }))}
-                      value={displayOrder?.status || ''}
-                    >
-                      <SelectTrigger className="w-full h-9">
-                        <SelectValue placeholder="Select Status" />
-                      </SelectTrigger>
-                      <SelectContent className="z-[9050]">
-                        <SelectItem value="Order Created">Order Created</SelectItem>
-                        <SelectItem value="Approved for Production">Approved for Production</SelectItem>
-                        <SelectItem value="Ready for Dispatch">Ready for Dispatch</SelectItem>
-                        <SelectItem value="Dispatched and Invoiced">Dispatched and Invoiced</SelectItem>
-                        <SelectItem value="Completed">Completed</SelectItem>
-                        <SelectItem value="Cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Badge className={`${STATUS_COLORS[displayOrder?.status || 'Order Created']} text-white font-semibold px-2 py-1 rounded-full text-xs`}>
-                      {displayOrder?.status}
-                    </Badge>
-                  )}
-                </div>
-              </div>
             </div>
+            <DialogDescription className="text-gray-600 dark:text-gray-400 mt-1">
+              {isEditMode ? 'Make changes and click Save All to apply.' : 'Comprehensive order information.'}
+            </DialogDescription>
+          </DialogHeader>
 
-            {/* Delivery & Vehicle Details Card - CLEAN WHITE REDESIGN */}
-            <div className="bg-white dark:bg-gray-900 p-4 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 space-y-3">
-
-              {/* Card Header */}
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-3 border-b-2 border-blue-500/50 pb-2">
-                <Truck className="w-7 h-7 text-blue-600 dark:text-blue-500" />
-                Delivery & Vehicle Operations
-              </h3>
-
-              {/* Highlighted Key Operational Fields: Weight Scale & Transport Provider */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                {/* Weight Scale - Premium Sub-card */}
-                <div className="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-lg shadow-lg border border-l-[10px] border-blue-600 dark:border-blue-500 flex flex-col justify-between">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Gauge className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <Label htmlFor="weightScaleType" className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Weight Scale</Label>
-                  </div>
-                  {isEditMode && canEditOperationsSpecificFields(currentUserProfile?.role ?? null) ? (
-                    <Select
-                      onValueChange={(value) => setPendingChanges(prev => ({
-                        ...prev,
-                        textFields: {
-                          ...prev.textFields,
-                          details: { ...prev.textFields.details, weightScaleType: value as any }
-                        },
-                        hasChanges: true,
-                      }))}
-                      value={displayOrder?.details?.weightScaleType || ''}
-                    >
-                      <SelectTrigger className="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm">
-                        <SelectValue placeholder="Select Type" />
-                      </SelectTrigger>
-                      <SelectContent className="z-[9050]">
-                        <SelectItem value="outside">Outside</SelectItem>
-                        <SelectItem value="inside">Inside</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="text-lg font-bold text-rose-800 dark:text-rose-200">
-                      {displayOrder?.details?.weightScaleType ? displayOrder.details.weightScaleType.charAt(0).toUpperCase() + displayOrder.details.weightScaleType.slice(1) : 'N/A'}
-                    </div>
-                  )}
-                </div>
-
-                {/* Transport Provider - Premium Sub-card */}
-                {(() => {
-                  const isPoter = displayOrder?.details?.transportProvider === 'poter';
-                  const cardTone = isPoter
-                    ? 'bg-violet-100 dark:bg-violet-900/30 border-l-[10px] border-violet-600 dark:border-violet-500'
-                    : 'bg-teal-100 dark:bg-teal-900/30 border-l-[10px] border-teal-600 dark:border-teal-500';
-                  const iconTone = isPoter
-                    ? 'text-violet-600 dark:text-violet-400'
-                    : 'text-teal-600 dark:text-teal-400';
-                  return (
-                  <div className={`${cardTone} p-4 rounded-lg shadow-lg flex flex-col justify-between`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Building className={`w-5 h-5 ${iconTone}`} />
-                      <Label htmlFor="transportProvider" className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Transport Provider</Label>
-                    </div>
-                    {isEditMode && canEditOperationsSpecificFields(currentUserProfile?.role ?? null) ? (
-                      <>
-                        <Select
-                          onValueChange={(value) => setPendingChanges(prev => ({
-                            ...prev,
-                            textFields: {
-                              ...prev.textFields,
-                              details: { ...prev.textFields.details, transportProvider: value as any }
-                            },
-                            hasChanges: true,
-                          }))}
-                          value={displayOrder?.details?.transportProvider || ''}
-                        >
-                          <SelectTrigger className="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm">
-                            <SelectValue placeholder="Select Provider" />
-                          </SelectTrigger>
-                          <SelectContent className="z-[9050]">
-                            <SelectItem value="client">Client Transport</SelectItem>
-                            <SelectItem value="own">Own Transport</SelectItem>
-                            <SelectItem value="poter">Poter</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {displayOrder?.details?.transportProvider === 'own' && (
-                          <div className="space-y-1 mt-2">
-                            <Label htmlFor="transportProviderName" className="font-medium text-xs text-gray-700 dark:text-gray-300">Provider Name:</Label>
-                            <Input
-                              id="transportProviderName"
-                              value={displayOrder?.details?.transportProviderName || ''}
-                              onChange={handleTextChange}
-                              placeholder="Enter provider name"
-                              className="bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 h-8 text-sm"
-                            />
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <div className="text-base font-medium text-gray-900 dark:text-white">
-                          {displayOrder?.details?.transportProvider ? TRANSPORT_PROVIDER_LABELS[displayOrder.details.transportProvider as TransportProvider] : 'N/A'}
-                        </div>
-                        {displayOrder?.details?.transportProvider === 'own' && displayOrder?.details?.transportProviderName && (
-                          <div className="space-y-0.5 mt-1">
-                            <Label className="font-medium text-xs text-gray-500 dark:text-gray-400">Provider Name:</Label>
-                            <p className="text-base font-bold text-fuchsia-800 dark:text-fuchsia-200">
-                              {displayOrder.details.transportProviderName}
-                            </p>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  );
-                })()}
-              </div>
-
-              {/* Secondary Details Section (Vehicle No & Site Info) */}
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
-
-                {/* Vehicle No */}
-                <div className="space-y-1">
-                  <Label htmlFor="vehicleNo" className="font-semibold text-gray-800 dark:text-gray-200 text-sm">Vehicle No.</Label>
-                  {isEditMode && canEditVehicleNoField(currentUserProfile?.role ?? null) ? (
-                    <Input
-                      id="vehicleNo"
-                      value={displayOrder?.details?.vehicleNo || ''}
-                      onChange={handleTextChange}
-                      className="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm"
-                    />
-                  ) : (
-                    <p className="text-base text-gray-900 dark:text-white font-medium">{displayOrder?.details?.vehicleNo || 'N/A'}</p>
-                  )}
-                </div>
-
-                {/* Site Delivery Info (moved to the end of primary fields) */}
-                {!isOperations(currentUserProfile?.role ?? null) && (
-                  <div className="space-y-1">
-                    <Label htmlFor="siteDeliveryInfo" className="font-semibold text-gray-800 dark:text-gray-200 text-sm">Site Info</Label>
-                    {isEditMode && (canEditOperationsSpecificFields(currentUserProfile?.role ?? null) || canEditSiteInfo(currentUserProfile)) ? (
-                      <RichTextarea
-                        id="siteDeliveryInfo"
-                        value={displayOrder?.details?.siteDeliveryInfo || ''}
-                        onChange={handleTextChange}
-                        rows={2}
-                        className="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm"
-                        placeholder="Site-specific delivery instructions or information..."
-                      />
-                    ) : (
-                      <div
-                        className="prose prose-xs dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 pt-1"
-                      >
-                        {displayOrder?.details?.siteDeliveryInfo ? (
-                          <div dangerouslySetInnerHTML={{ __html: renderMarkdownText(displayOrder.details.siteDeliveryInfo) }} />
-                        ) : (
-                          <p className="italic text-gray-500">N/A</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Vehicle Files Section */}
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div
-                  className="flex justify-between items-center cursor-pointer"
-                  onClick={() => setVehicleSectionOpen(!vehicleSectionOpen)}
-                >
-                  <h4 className="font-semibold text-gray-800 dark:text-white flex items-center gap-2 text-sm">
-                    <Upload className="w-5 h-5 text-gray-500 dark:text-gray-400" /> Delivery Attachments
-                    {pendingChanges.vehicleFiles.length > 0 && (
-                      <Badge className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">
-                        {pendingChanges.vehicleFiles.length} pending
-                      </Badge>
-
-                    )}
-                    {pendingChanges.productFiles.length > 0 && (
-                      <Badge className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">
-                        {pendingChanges.productFiles.length} file{pendingChanges.productFiles.length > 1 ? 's' : ''}
-                        {mergePreviews.product && ` → 1 PDF (${formatFileSize(mergePreviews.product.totalSize)})`}
-                      </Badge>
-                    )}
-                  </h4>
-                  {vehicleSectionOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
-                </div>
-
-                <div className={`pt-3 space-y-4 transition-all duration-300 ease-in-out ${vehicleSectionOpen ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
-                  {isEditMode && canEditOperationsSpecificFields(currentUserProfile?.role ?? null) && (
-                    <>
-                      <div
-                        className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center text-gray-500 dark:text-gray-400 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-800 transition-colors cursor-pointer group"
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e, (files) => handleFileAdd(files, 'vehicle'))}
-                      >
-                        <Input
-                          id="vehicle-files"
-                          type="file"
-                          multiple
-                          accept=".jpg,.jpeg,.png,.pdf,.webp"
-                          onChange={(e) => handleFileAdd(Array.from(e.target.files || []), 'vehicle')}
-                          className="hidden"
-                        />
-                        <Label htmlFor="vehicle-files" className="cursor-pointer flex flex-col items-center">
-                          <Upload className="w-8 h-8 mb-2 text-gray-400 group-hover:text-blue-600 transition-colors" />
-                          <span className="text-base font-medium">Drag & drop files here</span>
-                          <span className="text-xs">or <span className="text-blue-600 dark:text-blue-400 font-semibold">browse your computer</span></span>
-                        </Label>
-                      </div>
-
-                      {pendingChanges.vehicleFiles.length > 0 && (
-                        <div className="space-y-2 border p-3 rounded-lg bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800">
-                          <h5 className="font-semibold text-gray-800 dark:text-gray-200 text-base">Files Ready to Upload:</h5>
-                          <ul className="space-y-1">
-                            {pendingChanges.vehicleFiles.map((file, index) => (
-                              <li key={index} className="flex items-center justify-between bg-white dark:bg-gray-800 p-2 rounded-md shadow-sm">
-                                <span className="text-xs text-gray-700 dark:text-gray-300 truncate font-medium">{file.name}</span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleFileRemove(index, 'vehicle')}
-                                  className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900 rounded-full w-6 h-6"
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </li>
-                            ))}
-                          </ul>
-                          <p className="text-xs text-orange-700 dark:text-orange-400 mt-2">These files will be uploaded when you click &quotSave All&quot.</p>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* Uploaded Files */}
-                  {displayOrder?.details?.vehicleDriveIds && displayOrder.details.vehicleDriveIds.length > 0 ? (
-                    <div className="mt-4 space-y-2">
-                      <h5 className="font-semibold text-gray-800 dark:text-gray-200 text-base">Previously Uploaded Files:</h5>
-                      <div className="space-y-2">
-                        {displayOrder.details.vehicleDriveIds.map((file) => (
-                          <div key={file.fileId} className="flex items-center justify-between bg-white dark:bg-gray-800 p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-                            <span className="text-xs font-medium text-blue-700 dark:text-blue-400 truncate">{file.filename}</span>
-                            <div className="flex items-center gap-1">
-                              <a
-                                href={`https://drive.google.com/file/d/${file.fileId}/preview`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 w-8 h-8 flex items-center justify-center rounded-full hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors"
-                                title="View File"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </a>
-                              {isEditMode && canEditOperationsSpecificFields(currentUserProfile?.role ?? null) && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeleteUploadedFile(file.fileId, 'vehicle')}
-                                  className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900 rounded-full w-8 h-8"
-                                  title="Delete File"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-3 p-3 text-center border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                      No delivery attachments have been uploaded yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-
-
-
-          </div>
-
-          {/* RIGHT COLUMN */}
-          <div className="space-y-6">
-            {/* Product Details Card */}
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">
-                Product Details
-              </h3>
-
-              <div className="space-y-2">
-                <Label htmlFor="products" className="font-medium">Description:</Label>
-                {isEditMode && canEditSalesSpecificFields(currentUserProfile?.role ?? null) ? (
-                  <RichTextarea
-                    id="products"
-                    value={displayOrder?.products || ''}
-                    onChange={handleTextChange}
-                    rows={4}
-                    className="w-full"
-                    placeholder="Enter product details..."
-                  />
-                ) : (
-                  <div
-                    className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap p-2 border rounded-md min-h-[120px]"
-                    dangerouslySetInnerHTML={{ __html: renderMarkdownText(displayOrder?.products || 'N/A') }}
-                  />
-                )}
-              </div>
-
-              {/* Audio Manager Component */}
-              <AudioManager
-                currentUser={currentUserProfile}
-                identifier={currentOrder.deoNo}
-                identifierType="order"
-                uploadStage="productVoiceNote"
-                initialFiles={displayOrder?.details?.productVoiceNoteDriveIds || []}
-                onUploadComplete={handleUploadComplete}
-                editMode={isEditMode}
-                maxFiles={10}
-                acceptedFormats={['audio/webm', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/m4a']}
-                // NEW: Staging mode props
-                stagingMode={isEditMode}
-                pendingFiles={pendingChanges.productAudioFiles}
-                onFilesStaged={(files) => handleAudioFileAdd(files, 'product')}
-                onFileRemoved={(index) => handleAudioFileRemove(index, 'product')}
+          {/* MAIN CONTENT - Two Column Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            {/* LEFT COLUMN */}
+            <div className="space-y-6">
+              {/* Client & Status Card */}
+              <ClientStatusCard
+                isEditMode={isEditMode}
+                role={currentUserProfile?.role ?? null}
+                status={displayOrder?.status}
+                customerPaymentStatus={displayOrder?.customerPaymentStatus}
+                client={displayOrder?.client || ''}
+                contactNo={displayOrder?.contactNo || ''}
+                organizationContact={displayOrder?.organizationContact || ''}
+                partDelivery={displayOrder?.partDelivery || false}
+                isHighPriority={displayOrder?.isHighPriority || false}
+                orderDate={displayOrder?.details?.orderDate}
+                isAdditionalInfoOpen={isAdditionalInfoOpen}
+                onAdditionalInfoToggle={onAdditionalInfoToggle}
+                onTextChange={onTextChange}
+                onPaymentStatusChange={onPaymentStatusChange}
+                onPartDeliveryChange={onPartDeliveryChange}
+                onHighPriorityChange={onHighPriorityChange}
+                onStatusSelectChange={onStatusSelectChange}
               />
 
-              {/* Product Files Section */}
-              <div
-                className="flex justify-between items-center cursor-pointer mb-2 border-t pt-4"
-                onClick={() => setProductSectionOpen(!productSectionOpen)}
-              >
-                <h4 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <File className="w-5 h-5" /> Product Files
-                  {pendingChanges.productFiles.length > 0 && (
-                    <Badge className="bg-orange-500 text-white text-xs">{pendingChanges.productFiles.length} pending</Badge>
-                  )}
-                </h4>
-                {productSectionOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
-              </div>
-              <div className={`space-y-4 transition-all duration-300 ${productSectionOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
-                {isEditMode && canEditSalesSpecificFields(currentUserProfile?.role ?? null) && (
-                  <>
-                    <div
-                      className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center text-gray-500 dark:text-gray-400 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, (files) => handleFileAdd(files, 'product'))}
-                    >
-                      <Input
-                        id="product-files"
-                        type="file"
-                        multiple
-                        accept=".jpg,.jpeg,.png,.pdf,.webp,.ogg"
-                        onChange={(e) => handleFileAdd(Array.from(e.target.files || []), 'product')}
-                        className="hidden"
-                      />
-                      <Label htmlFor="product-files" className="cursor-pointer flex flex-col items-center">
-                        <Upload className="w-8 h-8 mb-2" />
-                        Drag & drop or <span className="text-blue-600">browse</span>
-                      </Label>
-                    </div>
+              {/* Delivery & Vehicle Details Card - CLEAN WHITE REDESIGN */}
+              <DeliveryVehicleCard
+                isEditMode={isEditMode}
+                role={currentUserProfile?.role ?? null}
+                isOperationsRole={isOperations(currentUserProfile?.role ?? null)}
+                canEditSite={canEditSiteInfo(currentUserProfile)}
+                weightScaleType={displayOrder?.details?.weightScaleType}
+                transportProvider={displayOrder?.details?.transportProvider}
+                transportProviderName={displayOrder?.details?.transportProviderName}
+                vehicleNo={displayOrder?.details?.vehicleNo}
+                siteDeliveryInfo={displayOrder?.details?.siteDeliveryInfo}
+                isVehicleSectionOpen={vehicleSectionOpen}
+                onVehicleSectionToggle={onVehicleSectionToggle}
+                onTextChange={onTextChange}
+                onWeightScaleChange={onWeightScaleChange}
+                onTransportProviderChange={onTransportProviderChange}
+                vehicleDriveIds={displayOrder?.details?.vehicleDriveIds || []}
+                pendingVehicleFiles={pendingChanges.vehicleFiles}
+                mergePreviewVehicle={mergePreviews.vehicle}
+                onVehicleFileAdd={onVehicleFileAdd}
+                onVehicleFileRemove={onVehicleFileRemove}
+                onDeleteUploadedFile={handleDeleteUploadedFile}
+                isSaving={isSaving}
+              />
 
-                    <div className={`space-y-2`}>
-
-
-                    </div>
-
-
-                    {pendingChanges.productFiles.length > 0 && (
-                      <div className="space-y-2 border p-3 rounded-md bg-orange-50 dark:bg-orange-950">
-                        <h5 className="font-semibold text-gray-800 dark:text-gray-200">Ready to Upload:</h5>
-                        <ul className="space-y-2">
-                          {pendingChanges.productFiles.map((file, index) => (
-                            <li key={index} className="flex items-center justify-between bg-white dark:bg-gray-700 p-2 rounded-md">
-                              <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{file.name}</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleFileRemove(index, 'product')}
-                                className="text-red-500 h-8 w-8 p-0"
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                            </li>
-                          ))}
-                        </ul>
-                        <p className="text-sm text-orange-600 dark:text-orange-400">Click &quot Save All &quot to upload these files</p>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Uploaded Files */}
-                {displayOrder?.details?.productDriveIds && displayOrder.details.productDriveIds.length > 0 ? (
-                  <div className="mt-4 space-y-2">
-                    <h5 className="font-semibold text-gray-800 dark:text-gray-200">Uploaded Files:</h5>
-                    <div className="grid grid-cols-1 gap-3">
-                      {displayOrder.details.productDriveIds.map((file) => (
-                        <div key={file.fileId} className="flex items-center justify-between bg-green-50 dark:bg-green-950 p-2 rounded-md">
-                          <span className="text-sm font-medium text-green-800 dark:text-green-200 truncate">{file.filename}</span>
-                          <div className="flex items-center gap-2">
-                            <a
-                              href={`https://drive.google.com/file/d/${file.fileId}/preview`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-800 h-8 w-8 p-0 flex items-center justify-center"
-                            >
-                              <Eye className="w-5 h-5" />
-                            </a>
-                            {isEditMode && canEditSalesSpecificFields(currentUserProfile?.role ?? null) && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteUploadedFile(file.fileId, 'product')}
-                                className="text-red-500 h-8 w-8 p-0"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No product files uploaded.</p>
-                )}
-              </div>
             </div>
 
-            {/* Invoice Details Card */}
-            {!isOperations(currentUserProfile?.role ?? null) && (
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 border-b pb-2">
-                  Invoice Details
-                </h3>
+            {/* RIGHT COLUMN */}
+            <div className="space-y-6">
+              {/* Product Details Card */}
+              <ProductDetailsCard
+                isEditMode={isEditMode}
+                role={currentUserProfile?.role ?? null}
+                currentUserProfile={currentUserProfile}
+                products={displayOrder?.products || ''}
+                deoNo={currentOrder.deoNo}
+                productVoiceNoteDriveIds={displayOrder?.details?.productVoiceNoteDriveIds || []}
+                productDriveIds={displayOrder?.details?.productDriveIds || []}
+                pendingProductAudioFiles={pendingChanges.productAudioFiles}
+                pendingProductFiles={pendingChanges.productFiles}
+                mergePreviewProduct={mergePreviews.product}
+                isProductSectionOpen={productSectionOpen}
+                onProductSectionToggle={onProductSectionToggle}
+                onTextChange={onTextChange}
+                onProductFileAdd={onProductFileAdd}
+                onProductFileRemove={onProductFileRemove}
+                onProductAudioStaged={handleProductAudioStaged}
+                onProductAudioRemoved={handleProductAudioRemoved}
+                onDeleteUploadedFile={handleDeleteUploadedFile}
+                onUploadComplete={handleUploadComplete}
+              />
 
-                <div className="space-y-2">
-                  <Label htmlFor="invoiceDetails" className="font-medium">Invoice Notes:</Label>
-                  {isEditMode && canEditInvoiceDetailsField(currentUserProfile?.role ?? null, displayOrder?.status) ? (
-                    <RichTextarea
-                      id="invoiceDetails"
-                      value={displayOrder?.details?.invoiceDetails || ''}
-                      onChange={handleTextChange}
-                      rows={3}
-                      className="w-full"
-                      placeholder="Enter invoice notes..."
-                      enableAutocomplete={true}
-                    />
-                  ) : (
-                    <div
-                      className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap p-2 border rounded-md min-h-[60px]"
-                      dangerouslySetInnerHTML={{ __html: renderMarkdownText(displayOrder?.details?.invoiceDetails || 'N/A') }}
-                    />
-                  )}
-                </div>
-
-                <div className="space-y-2 pt-4 border-t dark:border-gray-700">
-                  <Label htmlFor="invoiceNo" className="font-medium">Invoice No.:</Label>
-                  {isEditMode && canEditInvoiceNumberField(currentUserProfile?.role ?? null, displayOrder?.status) ? (
-                    <Input
-                      id="invoiceNo"
-                      value={displayOrder?.details?.invoiceNo || ''}
-                      onChange={handleTextChange}
-                      className="w-full h-9"
-                    />
-                  ) : (
-                    <span className="text-sm text-gray-800 dark:text-gray-200 p-2 border rounded-md block h-9 flex items-center">
-                      {displayOrder?.details?.invoiceNo || 'N/A'}
-                    </span>
-                  )}
-                </div>
-
-                {/* Invoice Files Section */}
-                <AudioManager
-                  currentUser={currentUserProfile}
-                  identifier={currentOrder.deoNo}
-                  identifierType="order"
-                  uploadStage="invoiceVoiceNote"
-                  initialFiles={displayOrder?.details?.invoiceVoiceNoteDriveIds || []}
+              {!isOperations(currentUserProfile?.role ?? null) && (
+                <InvoiceDetailsCard
+                  isEditMode={isEditMode}
+                  role={currentUserProfile?.role ?? null}
+                  status={displayOrder?.status}
+                  deoNo={currentOrder.deoNo}
+                  currentUserProfile={currentUserProfile}
+                  invoiceDetails={displayOrder?.details?.invoiceDetails}
+                  invoiceNo={displayOrder?.details?.invoiceNo}
+                  invoiceIssueDate={displayOrder?.details?.invoiceIssueDate}
+                  invoiceVoiceNoteDriveIds={displayOrder?.details?.invoiceVoiceNoteDriveIds || []}
+                  invoiceDriveId={displayOrder?.details?.invoiceDriveId || []}
+                  pendingInvoiceAudioFiles={pendingChanges.invoiceAudioFiles}
+                  pendingInvoiceFiles={pendingChanges.invoiceFiles}
+                  isInvoiceSectionOpen={invoiceSectionOpen}
+                  onInvoiceSectionToggle={onInvoiceSectionToggle}
+                  onTextChange={onTextChange}
+                  onInvoiceFileAdd={onInvoiceFileAdd}
+                  onInvoiceFileRemove={onInvoiceFileRemove}
+                  onInvoiceAudioStaged={handleInvoiceAudioStaged}
+                  onInvoiceAudioRemoved={handleInvoiceAudioRemoved}
+                  onDeleteUploadedFile={handleDeleteUploadedFile}
                   onUploadComplete={handleUploadComplete}
-                  editMode={isEditMode}
-                  maxFiles={10}
-                  acceptedFormats={['audio/webm', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/m4a']}
-                  // NEW: Staging mode props
-                  stagingMode={isEditMode}
-                  pendingFiles={pendingChanges.invoiceAudioFiles}
-                  onFilesStaged={(files) => handleAudioFileAdd(files, 'invoice')}
-                  onFileRemoved={(index) => handleAudioFileRemove(index, 'invoice')}
                 />
+              )}
+            </div>
 
-                <div
-                  className="flex justify-between items-center cursor-pointer mb-2 border-t pt-4"
-                  onClick={() => setInvoiceSectionOpen(!invoiceSectionOpen)}
-                >
-                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                    <DollarSign className="w-5 h-5" /> Invoice Files
-                    {pendingChanges.invoiceFiles.length > 0 && (
-                      <Badge className="bg-orange-500 text-white text-xs">{pendingChanges.invoiceFiles.length} pending</Badge>
-                    )}
-                  </h4>
-                  {invoiceSectionOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
-                </div>
-                <div className={`space-y-4 transition-all duration-300 ${invoiceSectionOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
-                  {isEditMode && canEditAccountantSpecificFields(currentUserProfile?.role ?? null, displayOrder?.status) && (
-                    <>
-                      <div
-                        className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center text-gray-500 dark:text-gray-400 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e, (files) => handleFileAdd(files, 'invoice'))}
-                      >
-                        <Input
-                          id="invoice-files"
-                          type="file"
-                          multiple
-                          accept=".jpg,.jpeg,.png,.pdf,.webp"
-                          onChange={(e) => handleFileAdd(Array.from(e.target.files || []), 'invoice')}
-                          className="hidden"
-                        />
-                        <Label htmlFor="invoice-files" className="cursor-pointer flex flex-col items-center">
-                          <Upload className="w-8 h-8 mb-2" />
-                          Drag & drop or <span className="text-blue-600">browse</span>
-                        </Label>
-                      </div>
 
-                      {pendingChanges.invoiceFiles.length > 0 && (
-                        <div className="space-y-2 border p-3 rounded-md bg-orange-50 dark:bg-orange-950">
-                          <h5 className="font-semibold text-gray-800 dark:text-gray-200">Ready to Upload:</h5>
-                          <ul className="space-y-2">
-                            {pendingChanges.invoiceFiles.map((file, index) => (
-                              <li key={index} className="flex items-center justify-between bg-white dark:bg-gray-700 p-2 rounded-md">
-                                <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{file.name}</span>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleFileRemove(index, 'invoice')}
-                                  className="text-red-500 h-8 w-8 p-0"
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </li>
-                            ))}
-                          </ul>
-                          <p className="text-sm text-orange-600 dark:text-orange-400">Click &quotSave All&quot to upload these files</p>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* Uploaded Files */}
-                  {displayOrder?.details?.invoiceDriveId && displayOrder.details.invoiceDriveId.length > 0 ? (
-                    <div className="mt-4 space-y-2">
-                      <h5 className="font-semibold text-gray-800 dark:text-gray-200">Uploaded Files:</h5>
-                      <div className="grid grid-cols-1 gap-3">
-                        {displayOrder.details.invoiceDriveId.map((file) => (
-                          <div key={file.fileId} className="flex items-center justify-between bg-green-50 dark:bg-green-950 p-2 rounded-md">
-                            <span className="text-sm font-medium text-green-800 dark:text-green-200 truncate">{file.filename}</span>
-                            <div className="flex items-center gap-2">
-                              <a
-                                href={`https://drive.google.com/file/d/${file.fileId}/preview`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800 h-8 w-8 p-0 flex items-center justify-center"
-                              >
-                                <Eye className="w-5 h-5" />
-                              </a>
-                              {isEditMode && canEditAccountantSpecificFields(currentUserProfile?.role ?? null, displayOrder?.status) && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteUploadedFile(file.fileId, 'invoice')}
-                                  className="text-red-500 h-8 w-8 p-0"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">No invoice files uploaded.</p>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
-        </div>
 
-        {/* FOOTER - Action Buttons */}
-        <DialogFooter className="mt-6 flex flex-wrap justify-start gap-3 border-t border-gray-200 dark:border-gray-700 pt-4">
-          {isEditMode ? (
-            <>
-              <Button variant="outline" onClick={handleCancelEdit} disabled={isSaving}>
+          {/* FOOTER - Action Buttons */}
+          <OrderActionsFooter
+            isEditMode={isEditMode}
+            isSaving={isSaving}
+            isMarkingPaid={isMarkingPaid}
+            isCreatingPartDelivery={isCreatingPartDelivery}
+            isMoreActionsOpen={isMoreActionsOpen}
+            role={currentUserProfile?.role ?? null}
+            status={displayOrder?.status}
+            customerPaymentStatus={displayOrder?.customerPaymentStatus}
+            partDelivery={displayOrder?.partDelivery}
+            isPaymentPending={isPaymentPending}
+            hasChanges={pendingChanges.hasChanges}
+            pendingChangesSummary={{
+              textFieldCount: Object.keys(pendingChanges.textFields).length,
+              fileCount: pendingChanges.productFiles.length + pendingChanges.vehicleFiles.length + pendingChanges.invoiceFiles.length,
+            }}
+            onCancelEdit={handleCancelEdit}
+            onSaveAll={handleSaveAllChanges}
+            onEditOrder={onEditOrder}
+            onApprove={onApprove}
+            onReadyForDispatch={onReadyForDispatch}
+            onPartDelivery={handleCreatePartDeliveryOrder}
+            onDispatchedInvoiced={onDispatchedInvoiced}
+            onComplete={onComplete}
+            onMoreActionsOpenChange={setIsMoreActionsOpen}
+            onMarkAsPaid={handleMarkAsPaid}
+            onCancelOrder={onCancelOrder}
+            onDeleteClick={onDeleteClick}
+            deoNo={currentOrder.deoNo}
+            currentUserProfile={currentUserProfile}
+          />
+
+        </DialogContent>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
+          <DialogContent className="sm:max-w-[425px] p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg z-[9003]">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Trash2 className="w-6 h-6 text-red-500" />
+                Confirm Deletion
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 dark:text-gray-400 mt-2">
+                Are you sure you want to delete order{' '}
+                <span className="font-semibold text-gray-900 dark:text-white">{order?.deoNo}</span>?
+                <br />
+                <span className="text-red-600 dark:text-red-400 font-medium mt-2 block">
+                  This action cannot be undone.
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-6 gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setIsConfirmDeleteDialogOpen(false)}
+                disabled={isDeletingOrder}
+              >
                 Cancel
               </Button>
               <Button
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={handleSaveAllChanges}
-                disabled={isSaving || !pendingChanges.hasChanges}
+                variant="destructive"
+                onClick={handleDeleteOrder}
+                disabled={isDeletingOrder}
+                className="bg-red-600 hover:bg-red-700"
               >
-                {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                <Save className="w-4 h-4 mr-2" />
-                Save All Changes
+                {isDeletingOrder && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Order
               </Button>
-              {pendingChanges.hasChanges && (
-                <span className="text-sm text-orange-600 dark:text-orange-400 flex items-center">
-                  {Object.keys(pendingChanges.textFields).length > 0 && `${Object.keys(pendingChanges.textFields).length} field(s)`}
-                  {Object.keys(pendingChanges.textFields).length > 0 && (pendingChanges.productFiles.length + pendingChanges.vehicleFiles.length + pendingChanges.invoiceFiles.length) > 0 && ', '}
-                  {(pendingChanges.productFiles.length + pendingChanges.vehicleFiles.length + pendingChanges.invoiceFiles.length) > 0 &&
-                    `${pendingChanges.productFiles.length + pendingChanges.vehicleFiles.length + pendingChanges.invoiceFiles.length} file(s)`}
-                  {' '}pending
-                </span>
-              )}
-            </>
-          ) : (
-            <>
-              <Button variant="outline" onClick={() => setIsEditMode(true)} className="flex-1 sm:flex-none">
-                <Edit className="w-4 h-4 mr-2" /> Edit Order
-              </Button>
-
-              {/* Status Transition Buttons */}
-              {canTransitionToGeneral(displayOrder?.status || '', 'Approved for Production') &&
-                isSuperAdmin(currentUserProfile?.role ?? null) && (
-                  <Button
-                    onClick={() => handleUpdateOrderStatus('Approved for Production')}
-                    className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white"
-                    disabled={isSaving}
-                  >
-                    {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Approve Order
-                  </Button>
-                )}
-
-              {canTransitionToGeneral(displayOrder?.status || '', 'Ready for Dispatch') &&
-                canEditOperationsSpecificFields(currentUserProfile?.role ?? null) && (
-                  <Button
-                    onClick={() => handleUpdateOrderStatus('Ready for Dispatch')}
-                    className="flex-1 sm:flex-none bg-purple-500 hover:bg-purple-600 text-white"
-                    disabled={isSaving}
-                  >
-                    {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Ready for Dispatch
-                  </Button>
-                )}
-
-              {displayOrder?.partDelivery &&
-                (displayOrder?.status === 'Ready for Dispatch' || displayOrder?.status === 'Approved for Production') &&
-                canCreatePartDelivery(currentUserProfile?.role ?? null) && (
-                  <Button
-                    onClick={handleCreatePartDeliveryOrder}
-                    className="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white"
-                    disabled={isCreatingPartDelivery}
-                  >
-                    {isCreatingPartDelivery && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Create Part Delivery
-                  </Button>
-                )}
-              {canTransitionToGeneral(displayOrder?.status || "", "Dispatched and Invoiced") &&
-                canEditOperationsSpecificFields(currentUserProfile?.role ?? null) && (
-                  <div className="relative flex flex-col gap-2">
-
-                    {/* Floating message that does NOT change layout */}
-                    {isPaymentPending && (
-                      <div className="absolute -top-20 left-0 w-full flex justify-start pointer-events-none">
-                        <p
-                          className="text-sm font-medium p-2 rounded border
-                   bg-red-50 text-red-700 border-red-300 
-                   dark:bg-red-950 dark:text-red-300 dark:border-red-700
-                   shadow-md"
-                        >
-                          ⚠️ Action Blocked: Confirm Payment Info.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Button */}
-                    <Button
-                      onClick={() => handleUpdateOrderStatus("Dispatched and Invoiced")}
-                      className="flex-1 sm:flex-none bg-yellow-500 hover:bg-yellow-600 text-white disabled:opacity-50"
-                      disabled={isButtonDisabled}
-                    >
-                      {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                      <Truck className="w-4 h-4 mr-2" /> Dispatched & Invoiced
-                    </Button>
-                  </div>
-
-                )
-              }
-
-
-              {canTransitionToGeneral(displayOrder?.status || '', 'Completed') &&
-                canEditAccountantSpecificFields(currentUserProfile?.role ?? null, displayOrder?.status) && (
-                  <Button
-                    onClick={() => handleUpdateOrderStatus('Completed')}
-                    className="flex-1 sm:flex-none bg-green-700 hover:bg-green-800 text-white"
-                    disabled={isSaving}
-                  >
-                    {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    <CheckCircle className="w-4 h-4 mr-2" /> Complete Order
-                  </Button>
-                )}
-
-              {/* More Actions Dialog */}
-              {(isSuperAdmin(currentUserProfile?.role ?? null) ||
-                isSales(currentUserProfile?.role ?? null) ||
-                isAccountant(currentUserProfile?.role ?? null)) && (
-                  <Dialog open={isMoreActionsOpen} onOpenChange={setIsMoreActionsOpen}>
-                    <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => setIsMoreActionsOpen(true)}>
-                      <MoreVertical className="w-4 h-4 mr-2" /> More Actions
-                    </Button>
-                    <DialogContent className="sm:max-w-[350px] md:max-w-[550px] p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg z-[9001]">
-                      <DialogHeader>
-                        <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white">Order Actions</DialogTitle>
-                        <DialogDescription className="text-gray-600 dark:text-gray-400">Select an action</DialogDescription>
-                      </DialogHeader>
-                      <div className="flex flex-col gap-3 mt-4">
-                        {displayOrder?.customerPaymentStatus === 'new-unpaid' && canMarkAsPaid(currentUserProfile?.role ?? null) && (
-                          <Button
-                            onClick={handleMarkAsPaid}
-                            className="w-full bg-blue-500 hover:bg-blue-600 text-white"
-                            disabled={isMarkingPaid}
-                          >
-                            {isMarkingPaid && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                            <Wallet className="w-4 h-4 mr-2" /> Mark as Paid
-                          </Button>
-                        )}
-
-                        {isSuperAdmin(currentUserProfile?.role ?? null) && (
-                          <Button
-                            variant="destructive"
-                            onClick={() => {
-                              setIsMoreActionsOpen(false);
-                              setIsConfirmDeleteDialogOpen(true);
-                            }}
-                            className="w-full"
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" /> Delete Order
-                          </Button>
-                        )}
-
-                        {canTransitionToGeneral(displayOrder?.status || '', 'Cancelled') &&
-                          canCancelOrder(currentUserProfile?.role ?? null) && (
-                            <Button
-                              variant="destructive"
-                              onClick={() => handleUpdateOrderStatus('Cancelled')}
-                              className="w-full"
-                              disabled={isSaving}
-                            >
-                              {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                              <XCircle className="w-4 h-4 mr-2" /> Cancel Order
-                            </Button>
-                          )}
-                          
-                          {/* Edit History */}
-                          <EditHistory
-                            orderId={currentOrder.deoNo ?? ""}
-                            currentUserProfile={currentUserProfile}
-                          />
-                     
-                      </div>
-                      <DialogFooter className="mt-4">
-                        <Button variant="outline" onClick={() => setIsMoreActionsOpen(false)} disabled={isMarkingPaid}>
-                          Close
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                )}
-            </>
-          )}
-        </DialogFooter>
-      </DialogContent>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg z-[9003]">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Trash2 className="w-6 h-6 text-red-500" />
-              Confirm Deletion
-            </DialogTitle>
-            <DialogDescription className="text-gray-600 dark:text-gray-400 mt-2">
-              Are you sure you want to delete order{' '}
-              <span className="font-semibold text-gray-900 dark:text-white">{order?.deoNo}</span>?
-              <br />
-              <span className="text-red-600 dark:text-red-400 font-medium mt-2 block">
-                This action cannot be undone.
-              </span>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-6 gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setIsConfirmDeleteDialogOpen(false)}
-              disabled={isDeletingOrder}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteOrder}
-              disabled={isDeletingOrder}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeletingOrder && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Order
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </Dialog>
-    </Dialog>
 
-    {/* PDF Field Config Modal — super-admin only */}
-    {canConfigurePdf(currentUserProfile.role) && (
-      <PdfConfigModal
-        isOpen={isPdfConfigOpen}
-        onClose={() => setIsPdfConfigOpen(false)}
-        currentConfig={pdfFieldConfig}
-        onSaved={handlePdfConfigSaved}
-        onExport={(config) => {
-          if (displayOrder) {
-            openOrderPdfInNewTab(displayOrder, config,currentUserProfile.name);
-          }
-        }}
-      />
-    )}
+      {/* PDF Field Config Modal — super-admin only */}
+      {canConfigurePdf(currentUserProfile.role) && (
+        <PdfConfigModal
+          isOpen={isPdfConfigOpen}
+          onClose={() => setIsPdfConfigOpen(false)}
+          currentConfig={pdfFieldConfig}
+          onSaved={handlePdfConfigSaved}
+          onExport={(config) => {
+            if (displayOrder) {
+              openOrderPdfInNewTab(displayOrder, config, currentUserProfile.name);
+            }
+          }}
+        />
+      )}
     </>
   );
 };

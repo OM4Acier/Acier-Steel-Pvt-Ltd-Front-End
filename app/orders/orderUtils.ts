@@ -82,8 +82,12 @@ export const groupOrdersByDate = (orders: Order[]): Record<string, Order[]> => {
   const grouped: Record<string, Order[]> = {};
 
   orders.forEach((order) => {
-    if (!order.updatedAt) return;
-    const date = new Date(order.updatedAt);
+    // Prefer the invoice issue date (set when an order is Completed). Fall back
+    // to updatedAt so non-Completed / legacy orders (which never get an invoice
+    // issue date) remain visible in the grouped view instead of being dropped.
+    const dateValue = order.details?.invoiceIssueDate || order.updatedAt;
+    if (!dateValue) return;
+    const date = new Date(dateValue);
     const year = date.getFullYear();
     const month = date.toLocaleString('default', { month: 'long' });
     const day = date.getDate().toString().padStart(2, '0');
@@ -95,11 +99,13 @@ export const groupOrdersByDate = (orders: Order[]): Record<string, Order[]> => {
     grouped[groupKey].push(order);
   });
 
-  // Sort orders within each date group
+  // Sort orders within each date group — newest first
   Object.keys(grouped).forEach((key) => {
-    grouped[key].sort(
-      (a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime()
-    );
+    grouped[key].sort((a, b) => {
+      const aValue = new Date(a.details?.invoiceIssueDate || a.updatedAt || 0).getTime();
+      const bValue = new Date(b.details?.invoiceIssueDate || b.updatedAt || 0).getTime();
+      return bValue - aValue;
+    });
   });
 
   return grouped;

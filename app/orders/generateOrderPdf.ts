@@ -346,6 +346,12 @@ export function buildOrderPdfHtml(
   // ── Invoice block ─────────────────────────────────────────────
   const invoiceRows: string[] = [];
   if (show('invoiceNo', v)) invoiceRows.push(row('Invoice No.', `<strong>${escHtml(d?.invoiceNo) || 'N/A'}</strong>`));
+  if (show('invoiceIssueDate', v)) {
+    const issueDate = d?.invoiceIssueDate
+      ? new Date(d.invoiceIssueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      : 'N/A';
+    invoiceRows.push(row('Invoice Issue Date', `<strong>${escHtml(issueDate)}</strong>`));
+  }
   if (show('invoiceDetails', v)) invoiceRows.push(row('Invoice Notes', d?.invoiceDetails ? `<div class="markdown-content">${renderMarkdownText(d.invoiceDetails)}</div>` : 'N/A', true));
 
   // ── Assemble sections ─────────────────────────────────────────

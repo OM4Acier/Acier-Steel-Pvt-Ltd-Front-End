@@ -133,6 +133,13 @@ export const PDF_FIELDS: PdfFieldConfig[] = [
     defaultVisible: true,
     visibleForRoles: ['super-admin', 'sales', 'accountant'],
   },
+  {
+    id: 'invoiceIssueDate',
+    label: 'Invoice Issue Date',
+    category: 'invoice',
+    defaultVisible: true,
+    visibleForRoles: ['super-admin', 'sales', 'accountant'],
+  },
 ];
 
 // ──────────────────────────────────────────────────────────────────
