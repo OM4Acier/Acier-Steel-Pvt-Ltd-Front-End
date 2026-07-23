@@ -434,8 +434,18 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       // backend omits it on existing orders — so `id in currentOrder.details`
       // returns false and the edit lands on the top-level textFields instead of
       // .details, leaving the input value stale. Force it into details.
-      const isDetailsField =
-        (currentOrder?.details && id in currentOrder.details) || id === 'invoiceIssueDate';
+      const detailsFields = [
+        'orderDate',
+        'invoiceDetails',
+        'vehicleNo',
+        'invoiceNo',
+        'invoiceIssueDate',
+        'siteDeliveryInfo',
+        'weightScaleType',
+        'transportProvider',
+        'transportProviderName'
+      ];
+      const isDetailsField = detailsFields.includes(id);
 
       if (isDetailsField) {
         return {

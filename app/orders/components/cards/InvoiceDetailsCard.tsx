@@ -65,13 +65,13 @@ const InvoiceDetailsCard: React.FC<InvoiceDetailsCardProps> = ({
         <div className="space-y-2">
           <Label htmlFor="invoiceNo" className="font-medium">Invoice No.:</Label>
           {isEditMode && canEditInvoiceNumberField(role, status) ? (
-                      <Input
-                        id="invoiceNo"
-                        value={invoiceNo || ''}
-                        onChange={onTextChange}
-                        type="text"
-                        className="w-full h-9"
-                      />
+            <Input
+              id="invoiceNo"
+              value={invoiceNo || ''}
+              onChange={onTextChange}
+              type="text"
+              className="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm"
+            />
                     ) : (
                       <span className="text-sm text-gray-800 dark:text-gray-200 p-2 border rounded-md block h-9 flex items-center">
                         {invoiceNo || 'N/A'}
@@ -85,13 +85,13 @@ const InvoiceDetailsCard: React.FC<InvoiceDetailsCardProps> = ({
             <Calendar className="w-4 h-4 text-gray-500" /> Invoice Issue Date:
           </Label>
           {isEditMode && canEditInvoiceIssueDateField(role, status) ? (
-             <input
-               id="invoiceIssueDate"
-               type="date"
-               value={invoiceIssueDate ?? ''}
-               onChange={onTextChange}
-               className="w-full h-9 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-             />
+            <Input
+              id="invoiceIssueDate"
+              type="date"
+              value={invoiceIssueDate ?? ''}
+              onChange={onTextChange}
+              className="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm"
+            />
           ) : (
             <span className="text-sm text-gray-800 dark:text-gray-200 p-2 border rounded-md block h-9 flex items-center">
               {invoiceIssueDate ? invoiceIssueDate.split('T')[0] : 'N/A'}
