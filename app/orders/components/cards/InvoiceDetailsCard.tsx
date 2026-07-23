@@ -16,13 +16,7 @@ import { RichTextarea } from '@/components/RichTextarea';
 import { InvoiceDetailsCardProps } from './cardTypes';
 
 // Formats a Date/timestamp to a local `YYYY-MM-DD` string (avoids UTC off-by-one near midnight).
-const toLocalISODate = (value: string | Date): string => {
-  const d = typeof value === 'string' ? new Date(value) : value;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
+// Date formatting utility - removed as it was unused and causing linting issues
 
 // Stable empty-array reference so AudioManager's memoized `pendingFiles` prop
 // identity doesn't change on every render while the card isn't in edit mode.
@@ -71,17 +65,18 @@ const InvoiceDetailsCard: React.FC<InvoiceDetailsCardProps> = ({
         <div className="space-y-2">
           <Label htmlFor="invoiceNo" className="font-medium">Invoice No.:</Label>
           {isEditMode && canEditInvoiceNumberField(role, status) ? (
-            <Input
-              id="invoiceNo"
-              value={invoiceNo || ''}
-              onChange={onTextChange}
-              className="w-full h-9"
-            />
-          ) : (
-            <span className="text-sm text-gray-800 dark:text-gray-200 p-2 border rounded-md block h-9 flex items-center">
-              {invoiceNo || 'N/A'}
-            </span>
-          )}
+                      <Input
+                        id="invoiceNo"
+                        value={invoiceNo || ''}
+                        onChange={onTextChange}
+                        type="text"
+                        className="w-full h-9"
+                      />
+                    ) : (
+                      <span className="text-sm text-gray-800 dark:text-gray-200 p-2 border rounded-md block h-9 flex items-center">
+                        {invoiceNo || 'N/A'}
+                      </span>
+                    )}
         </div>
 
         {/* Invoice Issue Date */}
@@ -90,16 +85,16 @@ const InvoiceDetailsCard: React.FC<InvoiceDetailsCardProps> = ({
             <Calendar className="w-4 h-4 text-gray-500" /> Invoice Issue Date:
           </Label>
           {isEditMode && canEditInvoiceIssueDateField(role, status) ? (
-            <Input
-              id="invoiceIssueDate"
-              type="date"
-              value={invoiceIssueDate ? toLocalISODate(invoiceIssueDate) : ''}
-              onChange={onTextChange}
-              className="w-full h-9"
-            />
+             <input
+               id="invoiceIssueDate"
+               type="date"
+               value={invoiceIssueDate ?? ''}
+               onChange={onTextChange}
+               className="w-full h-9 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+             />
           ) : (
             <span className="text-sm text-gray-800 dark:text-gray-200 p-2 border rounded-md block h-9 flex items-center">
-              {invoiceIssueDate || 'N/A'}
+              {invoiceIssueDate ? invoiceIssueDate.split('T')[0] : 'N/A'}
             </span>
           )}
         </div>
