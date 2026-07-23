@@ -15,7 +15,28 @@ import {
   AlertCircle, // Added AlertCircle for unpaid status
 } from 'lucide-react';
 
-import { Order } from '../types';
+import { Order, TransportProvider } from '../types';
+
+const TRANSPORT_STYLES: Record<TransportProvider, { label: string; tagColor: string; badgeClass: string; borderClass: string }> = {
+  poter: {
+    label: 'Poter',
+    tagColor: 'bg-violet-600',
+    badgeClass: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300',
+    borderClass: 'border-0 border-violet-500 shadow-lg shadow-violet-500/30',
+  },
+  client: {
+    label: 'Client Transport',
+    tagColor: 'bg-blue-600',
+    badgeClass: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
+    borderClass: 'border-0 border-blue-500 shadow-lg shadow-blue-500/30',
+  },
+  own: {
+    label: 'Own Transport',
+    tagColor: 'bg-emerald-600',
+    badgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
+    borderClass: 'border-0 border-emerald-500 shadow-lg shadow-emerald-500/30',
+  },
+};
 
 interface OrderCardProps {
   order: Order;
@@ -32,14 +53,16 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   statusIcons,
   userRole,
 }) => {
-  // Apply visual indication for High Priority, Payment Status, and Poter transport
-  const isPoter = order?.details?.transportProvider === 'poter';
+  // Apply visual indication for High Priority, Payment Status, and transport
+  const transportProvider = order?.details?.transportProvider;
+  const transportStyle = transportProvider ? TRANSPORT_STYLES[transportProvider] : null;
+
   const cardStatusStyle = order.isHighPriority
     ? 'border-2 border-red-500 shadow-xl shadow-red-500/40'
     : order?.customerPaymentStatus === 'new-unpaid'
       ? 'border-2 border-amber-500 shadow-lg shadow-amber-500/30'
-      : isPoter
-        ? 'border-2 border-violet-500 shadow-lg shadow-violet-500/30'
+      : transportStyle
+        ? transportStyle.borderClass
         : 'border border-gray-300 dark:border-gray-600 hover:shadow-md';
 
   return (
@@ -48,14 +71,14 @@ export const OrderCard: React.FC<OrderCardProps> = ({
       // Card BG is set to dark:bg-gray-900 (slightly darker than content for separation)
       className={`relative cursor-pointer transition-all duration-300 transform hover:-translate-y-1 rounded-xl overflow-hidden min-w-[280px] bg-white dark:bg-gray-900 ${cardStatusStyle}`}
     >
-      {/* Poter tag - Clean & Minimal */}
-      {isPoter && (
+      {/* Transport tag - Clean & Minimal 
+      {transportStyle && (
         <div className="absolute top-0 right-0 z-20">
-          <div className="bg-violet-600 text-white text-[10px] font-medium uppercase tracking-wide px-3 py-1 rounded-bl-xl shadow-sm">
-            Poter
+          <div className={`text-white text-[10px] font-medium uppercase tracking-wide px-3 py-1 rounded-bl-xl shadow-sm ${transportStyle.tagColor}`}>
+            {transportStyle.label}
           </div>
         </div>
-      )}
+      )}*/}
 
       {/* HEADER SECTION: Status (Left) and Badges (Right) */}
       <CardHeader
@@ -100,10 +123,13 @@ export const OrderCard: React.FC<OrderCardProps> = ({
     
       <CardContent className="space-y-4 p-4 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
         {/* Transport Badge */}
-        {isPoter && (
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300">
+        {transportStyle && (
+          <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium ${transportStyle.badgeClass}`}>
             <Truck className="h-4 w-4" />
-            <span>Poter Transport</span>
+            <span>
+              {transportStyle.label}
+              {order?.details?.transportProviderName ? ` - ${order.details.transportProviderName}` : ''}
+            </span>
           </div>
         )}
 
