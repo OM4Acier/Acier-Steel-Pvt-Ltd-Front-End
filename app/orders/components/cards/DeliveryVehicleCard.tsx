@@ -14,20 +14,19 @@ import { formatFileSize } from '@/lib/utils/pdfMergeUtils';
 import {
   canEditOperationsSpecificFields, canEditVehicleNoField,
 } from '../../permissions';
-import { TRANSPORT_PROVIDER_LABELS } from '../../types';
+import { TRANSPORT_PROVIDER_LABELS, MEASUREMENT_KATA_LABELS, TransportProvider } from '../../types';
 import { RichTextarea } from '@/components/RichTextarea';
-import { TransportProvider } from '../../types';
 import { DeliveryVehicleCardProps } from './cardTypes';
 
 const DeliveryVehicleCard: React.FC<DeliveryVehicleCardProps> = ({
   isEditMode, role, isOperationsRole, canEditSite,
-  weightScaleType, transportProvider, transportProviderName, vehicleNo, siteDeliveryInfo,
+  measurementKata, transportProvider, transportProviderName, vehicleNo, siteDeliveryInfo,
   isVehicleSectionOpen, onVehicleSectionToggle, onTextChange,
   onWeightScaleChange, onTransportProviderChange,
   vehicleDriveIds, pendingVehicleFiles, mergePreviewVehicle,
   onVehicleFileAdd, onVehicleFileRemove, onDeleteUploadedFile,
   }: DeliveryVehicleCardProps) => {
-  const isPoter = transportProvider === 'poter';
+  const isPoter = transportProvider === 'Porter';
   const cardTone = isPoter
     ? 'bg-violet-100 dark:bg-violet-900/30 border-l-[10px] border-violet-600 dark:border-violet-500'
     : 'bg-teal-100 dark:bg-teal-900/30 border-l-[10px] border-teal-600 dark:border-teal-500';
@@ -47,31 +46,31 @@ const DeliveryVehicleCard: React.FC<DeliveryVehicleCardProps> = ({
       {/* Highlighted Key Operational Fields: Weight Scale & Transport Provider */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-        {/* Weight Scale - Premium Sub-card */}
-        <div className="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-lg shadow-lg border border-l-[10px] border-blue-600 dark:border-blue-500 flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <Gauge className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <Label htmlFor="weightScaleType" className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Weight Scale</Label>
-          </div>
-          {isEditMode && canEditOperationsSpecificFields(role) ? (
-            <Select
-              onValueChange={onWeightScaleChange}
-              value={weightScaleType || ''}
-            >
-              <SelectTrigger className="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm">
-                <SelectValue placeholder="Select Type" />
-              </SelectTrigger>
-              <SelectContent className="z-[9050]">
-                <SelectItem value="outside">Outside</SelectItem>
-                <SelectItem value="inside">Inside</SelectItem>
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className="text-lg font-bold text-rose-800 dark:text-rose-200">
-              {weightScaleType ? weightScaleType.charAt(0).toUpperCase() + weightScaleType.slice(1) : 'N/A'}
-            </div>
-          )}
-        </div>
+        {/* Measurement Kata - Premium Sub-card */}
+                <div className="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-lg shadow-lg border border-l-[10px] border-blue-600 dark:border-blue-500 flex flex-col justify-between">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Gauge className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <Label htmlFor="measurementKata" className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Measurement Kata</Label>
+                  </div>
+                  {isEditMode && canEditOperationsSpecificFields(role) ? (
+                    <Select
+                      onValueChange={onWeightScaleChange}
+                      value={measurementKata || ''}
+                    >
+                      <SelectTrigger className="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm">
+                        <SelectValue placeholder="Select Type" />
+                      </SelectTrigger>
+                      <SelectContent className="z-[9050]">
+                        <SelectItem value="prince">Prince Kata</SelectItem>
+                        <SelectItem value="factory">Factory Kata</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="text-lg font-bold text-rose-800 dark:text-rose-200">
+                      {measurementKata ? MEASUREMENT_KATA_LABELS[measurementKata] : 'N/A'}
+                    </div>
+                  )}
+                </div>
 
         {/* Transport Provider - Premium Sub-card */}
         <div className={`${cardTone} p-4 rounded-lg shadow-lg flex flex-col justify-between`}>
@@ -89,10 +88,10 @@ const DeliveryVehicleCard: React.FC<DeliveryVehicleCardProps> = ({
                   <SelectValue placeholder="Select Provider" />
                 </SelectTrigger>
                 <SelectContent className="z-[9050]">
-                  <SelectItem value="client">Client Transport</SelectItem>
-                  <SelectItem value="own">Own Transport</SelectItem>
-                  <SelectItem value="poter">Poter</SelectItem>
-                </SelectContent>
+                                  <SelectItem value="client">Client Transport</SelectItem>
+                                  <SelectItem value="own">Own Transport</SelectItem>
+                                  <SelectItem value="Porter">Porter</SelectItem>
+                                </SelectContent>
               </Select>
               {transportProvider === 'own' && (
                 <div className="space-y-1 mt-2">

@@ -38,7 +38,7 @@ import {
   Users,
   Phone,
 } from 'lucide-react';
-import { CustomerPaymentStatus, DeoNumbersByPrefix, DialogMessageType, Order, WeightScaleType } from '../types';
+import { CustomerPaymentStatus, DeoNumbersByPrefix, DialogMessageType, Order, MeasurementKata, TRANSPORT_PROVIDER_LABELS, MEASUREMENT_KATA_LABELS } from '../types';
 import { ordersApi } from '@/lib/api/endpoints/ordersApi';
 const apiService = ordersApi;
 import { customersApi, CustomerSummary } from '@/lib/api/endpoints/customers';
@@ -89,7 +89,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
       orderDate: '',
       invoiceDetails: '',
       siteDeliveryInfo: '',
-      weightScaleType: 'outside',
+      measurementKata: undefined,
       transportProvider: 'client',
       transportProviderName: '',
       productDriveIds: [],
@@ -135,9 +135,45 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   const [salesExecSearch, setSalesExecSearch] = useState('');
   const [salesExecOptions, setSalesExecOptions] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [selectedSalesExec, setSelectedSalesExec] = useState<{ userId?: string; name?: string; email?: string } | null>(null);
-  const [isSalesExecLoading, setIsSalesExecLoading] = useState(false);
   const [salesExecNoMatches, setSalesExecNoMatches] = useState(false);
   const [isSalesExecOpen, setIsSalesExecOpen] = useState(false);
+
+  // ─── salesExecutive debounce + cache ───────────────────────────────────────
+  // Cache the full user list at module scope — user/role membership rarely
+  // changes within a session. We only refetch when the cache is missing or
+  // explicitly invalidated. Debounce so we don't re-filter on every keystroke.
+  const salesExecDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const salesExecCacheRef = React.useRef<Array<{ id: string; name: string; email: string }> | null>(null);
+  const salesExecInflightRef = React.useRef<Promise<Array<{ id: string; name: string; email: string }>> | null>(null);
+
+  const fetchSalesExecUsers = React.useCallback(async (): Promise<Array<{ id: string; name: string; email: string }>> => {
+    if (salesExecCacheRef.current) return salesExecCacheRef.current;
+    if (salesExecInflightRef.current) return salesExecInflightRef.current;
+    const inflight = usersApi.getUsers()
+      .then((users) => {
+        const mapped = users
+          .filter((u) => u.name && u.email)
+          .map((u) => ({ id: u.clerkId, name: u.name, email: u.email }));
+        salesExecCacheRef.current = mapped;
+        return mapped;
+      })
+      .catch((err) => {
+        console.error('Failed to fetch sales executives', err);
+        return [] as Array<{ id: string; name: string; email: string }>;
+      })
+      .finally(() => {
+        salesExecInflightRef.current = null;
+      });
+    salesExecInflightRef.current = inflight;
+    return inflight;
+  }, []);
+
+  // Eagerly populate cache when the dialog opens so the first keystroke is instant.
+  React.useEffect(() => {
+    if (isOpen) {
+      void fetchSalesExecUsers();
+    }
+  }, [isOpen, fetchSalesExecUsers]);
 
   const [uploadProgress, setUploadProgress] = useState<{
     total: number;
@@ -158,30 +194,34 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     }
   }, [currentUserProfile, selectedSalesExec]);
 
-  // ─── Search salesExecutives ─────────────────────────────────────────────────
-  const handleSalesExecSearch = async (query: string) => {
+  // ─── Search salesExecutives (debounced + cached) ───────────────────────────
+  const handleSalesExecSearch = (query: string) => {
     setSalesExecSearch(query);
     setSalesExecNoMatches(false);
     if (!query.trim()) {
       setSalesExecOptions([]);
       return;
     }
-    setIsSalesExecLoading(true);
-    try {
-      // Endpoint /admin/users or cached sales-exec search
-      const users = await usersApi.getUsers();
-      const filtered = users
-        .filter((u) => u.name.toLowerCase().includes(query.toLowerCase()) || u.email.toLowerCase().includes(query.toLowerCase()))
-        .map((u) => ({ id: u.clerkId, name: u.name, email: u.email }));
+    // Cancel any pending filter call — debounce 200ms so we don't filter on
+    // every keystroke. Filter is pure local work against the cached user list.
+    if (salesExecDebounceRef.current) clearTimeout(salesExecDebounceRef.current);
+    salesExecDebounceRef.current = setTimeout(async () => {
+      const users = await fetchSalesExecUsers();
+      const q = query.toLowerCase();
+      const filtered = users.filter(
+        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
+      );
       setSalesExecOptions(filtered);
       setSalesExecNoMatches(filtered.length === 0);
-    } catch (err) {
-      console.error('Failed to search sales executives', err);
-      // Fallback: keep existing selected user or fallback to logged-in user
-    } finally {
-      setIsSalesExecLoading(false);
-    }
+    }, 200);
   };
+
+  // Cleanup pending debounce on unmount/close.
+  React.useEffect(() => {
+    return () => {
+      if (salesExecDebounceRef.current) clearTimeout(salesExecDebounceRef.current);
+    };
+  }, []);
 
   // ─── Prefill from Quotation Effect ──────────────────────────────────────────
   React.useEffect(() => {
@@ -517,6 +557,64 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     });
   };
 
+  // ─── Auto-insert real-time values into Product Information section ──────────
+  // Transit provider, kata, and payment status are mirrored as 3 real-time
+  // lines appended at the END of the products textarea. The values are read
+  // live from orderData on every change — not snapshotted as a string.
+  // We identify the trailing block by its first line "*Transit Provider*:"
+  // so we always replace exactly those 3 lines (or fewer if a value is empty).
+  const PRODUCTS_FOOTER_MARKER = '*Transit Provider*:';
+
+  const buildProductsFooter = () => {
+    const details = orderData.details;
+    const transport = details?.transportProvider
+      ? TRANSPORT_PROVIDER_LABELS[details.transportProvider] ||
+        (details.transportProvider === 'Porter' ? 'Porter' : String(details.transportProvider))
+      : '';
+    const transportLine = transport
+      ? (details!.transportProvider === 'own' && details!.transportProviderName
+          ? `*Transit Provider*: ${transport} - ${details!.transportProviderName}`
+          : `*Transit Provider*: ${transport}`)
+      : '';
+    const kata = details?.measurementKata;
+    const kataLine = kata ? `*Kata*: ${MEASUREMENT_KATA_LABELS[kata]}` : '';
+    const paymentLabels: Record<string, string> = {
+      regular: 'Regular Account',
+      'new-paid': 'New - Prepaid',
+      'new-unpaid': 'New - Unpaid',
+    };
+    const payment = orderData.customerPaymentStatus;
+    const paymentLine = payment ? `*Payment*: ${paymentLabels[payment] || payment}` : '';
+    return [transportLine, kataLine, paymentLine].filter(Boolean).join('\n');
+  };
+
+  // Strip a previous auto footer (if any) and append a fresh one.
+  // The footer is exactly the 3 data lines, with a leading blank line separator.
+  const applyProductsFooter = (text: string): string => {
+    const markerIdx = text.indexOf(PRODUCTS_FOOTER_MARKER);
+    const before = markerIdx === -1 ? text : text.substring(0, markerIdx);
+    const footer = buildProductsFooter();
+    const trimmedBefore = before.replace(/\s+$/, '');
+    if (!footer) return trimmedBefore;
+    return `${trimmedBefore}\n\n${footer}`;
+  };
+
+  const autoKeys = JSON.stringify({
+    transport: orderData.details?.transportProvider,
+    transportName: orderData.details?.transportProviderName,
+    kata: orderData.details?.measurementKata,
+    payment: orderData.customerPaymentStatus,
+  });
+
+  React.useEffect(() => {
+    setOrderData((prev) => {
+      const currentProducts = prev.products || '';
+      const nextProducts = applyProductsFooter(currentProducts);
+      if (nextProducts === currentProducts) return prev;
+      return { ...prev, products: nextProducts };
+    });
+  }, [autoKeys]);
+
   // ─── Form reset ───────────────────────────────────────────────────────────
 
   const resetFormData = () => {
@@ -564,11 +662,11 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   };
 
   const handleWeightScaleChange = (value: string) => {
-    setOrderData((prev) => ({
-      ...prev,
-      details: { ...prev.details!, weightScaleType: value as WeightScaleType },
-    }));
-  };
+      setOrderData((prev) => ({
+        ...prev,
+        details: { ...prev.details!, measurementKata: value as MeasurementKata },
+      }));
+    };
 
   const handlePaymentStatusChange = (value: string) => {
     setOrderData((prev) => ({ ...prev, customerPaymentStatus: value as CustomerPaymentStatus }));
@@ -792,8 +890,8 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
               <h3 className={sectionLabelClass}>
                 <Fingerprint className="w-3.5 h-3.5" /> Order Information
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                <div className="md:col-span-4 space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
                     Delivery Order Number
                   </Label>
@@ -832,7 +930,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="md:col-span-3 space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
                     Standard Page
                   </Label>
@@ -846,12 +944,72 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                       <Zap
                         className={`w-3.5 h-3.5 ${orderData.isHighPriority ? 'fill-red-600 animate-pulse' : ''}`}
                       />
-                      {orderData.isHighPriority ? 'CRITICAL PRIORITY' : 'STANDARD PACE'}
+                      {orderData.isHighPriority ? 'CRITICAL' : 'STANDARD'}
                     </span>
                     <Switch
                       checked={orderData.isHighPriority}
                       className="scale-75 data-[state=checked]:bg-red-600"
                     />
+                  </div>
+                </div>
+
+                {/* Organization Contact - Compact */}
+                <div className="md:col-span-5 space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
+                    Organization Contact
+                  </Label>
+                  <div className="relative">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Input
+                          id="salesExecSearch"
+                          value={salesExecSearch}
+                          onChange={(e) => handleSalesExecSearch(e.target.value)}
+                          onFocus={() => setIsSalesExecOpen(true)}
+                          onBlur={() => setTimeout(() => setIsSalesExecOpen(false), 200)}
+                          placeholder="Sales exec..."
+                          className={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm focus:ring-4 focus:ring-blue-500/5 transition-all text-sm font-bold pr-9`}
+                        />
+                        {isSalesExecOpen && salesExecOptions.length === 0 && salesExecNoMatches === false && salesExecSearch && (
+                          <Loader2 className="absolute right-3 top-4 w-4 h-4 animate-spin text-blue-400" />
+                        )}
+                      </div>
+                      {selectedSalesExec && (
+                        <div className={`${inputHeight} px-3 flex items-center gap-1.5 rounded-2xl bg-blue-500/5 border border-blue-100 dark:border-blue-900/30 text-blue-600 text-[10px] font-black uppercase tracking-tight shrink-0`}>
+                          <Check className="w-3 h-3" />
+                          {selectedSalesExec.name || selectedSalesExec.email}
+                        </div>
+                      )}
+                    </div>
+
+                    {isSalesExecOpen && (salesExecOptions.length > 0 || salesExecNoMatches) && (
+                      <div
+                        className="absolute z-[10002] top-full left-0 w-full mt-2 bg-white dark:bg-gray-800 shadow-2xl rounded-[1.5rem] border border-gray-100 dark:border-white/10 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
+                        onMouseDown={(e) => e.preventDefault()}
+                      >
+                        {salesExecNoMatches ? (
+                          <div className="p-4 text-center text-[10px] font-black text-gray-400 uppercase">
+                            No matching executives
+                          </div>
+                        ) : (
+                          salesExecOptions.map((exec) => (
+                            <div
+                              key={exec.id}
+                              onClick={() => {
+                                setSelectedSalesExec({ userId: exec.id, name: exec.name, email: exec.email });
+                                setSalesExecSearch(exec.name);
+                                setIsSalesExecOpen(false);
+                                setSalesExecOptions([]);
+                              }}
+                              className="p-3 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 cursor-pointer border-b border-gray-50 dark:border-white/5 last:border-0 transition-colors"
+                            >
+                              <div className="font-bold text-sm text-gray-800 dark:text-gray-100">{exec.name}</div>
+                              <div className="text-[10px] text-gray-400 font-bold mt-0.5">{exec.email}</div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1114,18 +1272,21 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
                 <div className="md:col-span-8 space-y-2">
-                  <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
-                    Product Specifications
-                  </Label>
-                  <RichTextarea
-                    id="products"
-                    value={orderData.products || ''}
-                    onChange={handleChange}
-                    rows={5}
-                    placeholder="e.g., **500 sqm** Color Coated Sheets; Price: ₹{{500*120}}/sqm"
-                    className="rounded-[1.5rem] border-gray-100 shadow-sm text-sm font-medium leading-relaxed"
-                  />
-                </div>
+                                  <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
+                                    Product Specifications
+                                  </Label>
+                                  <RichTextarea
+                                    id="products"
+                                    value={orderData.products || ''}
+                                    onChange={handleChange}
+                                    rows={5}
+                                    placeholder="e.g., **500 sqm** Color Coated Sheets; Price: ₹{{500*120}}/sqm"
+                                    className="rounded-[1.5rem] border-gray-100 shadow-sm text-sm font-medium leading-relaxed"
+                                  />
+                                  <p className="text-[9px] text-gray-400 italic mt-1">
+                                    Transit Provider, Kata, and Payment Status auto-append to the bottom in real time.
+                                  </p>
+                                </div>
                 <div className="md:col-span-4 space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
                     Voice Note
@@ -1171,16 +1332,16 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                         <SelectValue placeholder="Provider" />
                       </SelectTrigger>
                       <SelectContent className="z-[10001] rounded-xl">
-                        <SelectItem value="client" className="font-bold">
-                          Client Arrangement
-                        </SelectItem>
-                          <SelectItem value="poter" className="font-bold">
-                          Poter
-                        </SelectItem>
-                        <SelectItem value="own" className="font-bold">
-                          Company Fleet
-                        </SelectItem>
-                      </SelectContent>
+                                              <SelectItem value="client" className="font-bold">
+                                                Client Arrangement
+                                              </SelectItem>
+                                                <SelectItem value="Porter" className="font-bold">
+                                                Porter
+                                              </SelectItem>
+                                              <SelectItem value="own" className="font-bold">
+                                                Company Fleet
+                                              </SelectItem>
+                                            </SelectContent>
                     </Select>
                     {orderData.details?.transportProvider === 'own' && (
                       <Input
@@ -1198,28 +1359,28 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
-                    Measurement Scale
-                  </Label>
-                  <Select
-                    onValueChange={handleWeightScaleChange}
-                    value={orderData.details?.weightScaleType || ''}
-                  >
-                    <SelectTrigger
-                      className={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
-                    >
-                      <SelectValue placeholder="Select Scale Type" />
-                    </SelectTrigger>
-                    <SelectContent className="z-[10001] rounded-xl">
-                      <SelectItem value="outside" className="font-bold">
-                        Third-Party Scale
-                      </SelectItem>
-                      <SelectItem value="inside" className="font-bold">
-                        Factory In-House
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                                  <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
+                                    Measurement Kata
+                                  </Label>
+                                  <Select
+                                    onValueChange={handleWeightScaleChange}
+                                    value={orderData.details?.measurementKata || ''}
+                                  >
+                                    <SelectTrigger
+                                      className={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
+                                    >
+                                      <SelectValue placeholder="Select Kata Type" />
+                                    </SelectTrigger>
+                                    <SelectContent className="z-[10001] rounded-xl">
+                                      <SelectItem value="prince" className="font-bold">
+                                        Prince Kata
+                                      </SelectItem>
+                                      <SelectItem value="factory" className="font-bold">
+                                        Factory Kata
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
               </div>
 
               <div className="space-y-2">
@@ -1298,87 +1459,6 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                   ))}
                 </div>
               </div>
-            </section>
-
-            {/* SECTION 4: ORGANIZATION CONTACT (Sales Executive) */}
-            <section className={sectionCardClass}>
-              <h3 className={sectionLabelClass}>
-                <Users className="w-3.5 h-3.5" /> Organization Contact
-              </h3>
-              <div className="relative">
-                <div className="flex gap-3">
-                  <div className="relative flex-1 group">
-                    <Input
-                      id="salesExecSearch"
-                      value={salesExecSearch}
-                      onChange={(e) => handleSalesExecSearch(e.target.value)}
-                      onFocus={() => setIsSalesExecOpen(true)}
-                      onBlur={() => setTimeout(() => setIsSalesExecOpen(false), 200)}
-                      placeholder="Search sales executive by name or email..."
-                      className={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm focus:ring-4 focus:ring-blue-500/5 transition-all text-sm font-bold`}
-                    />
-                    {isSalesExecLoading && (
-                      <Loader2 className="absolute right-4 top-4 w-4 h-4 animate-spin text-blue-400" />
-                    )}
-                  </div>
-                  {selectedSalesExec && (
-                    <div className={`${inputHeight} px-5 flex items-center gap-2 rounded-2xl bg-blue-500/5 border border-blue-100 dark:border-blue-900/30 text-blue-600 text-[11px] font-black uppercase tracking-tight shrink-0`}>
-                      <Check className="w-3.5 h-3.5" />
-                      {selectedSalesExec.name || selectedSalesExec.email}
-                    </div>
-                  )}
-                </div>
-
-                {isSalesExecOpen && (salesExecOptions.length > 0 || salesExecNoMatches) && (
-                  <div
-                    className="absolute z-[10002] top-full left-0 w-full mt-2 bg-white dark:bg-gray-800 shadow-2xl rounded-[1.5rem] border border-gray-100 dark:border-white/10 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    {salesExecNoMatches ? (
-                      <div className="p-6 text-center text-[11px] font-black text-gray-400 uppercase">
-                        No matching executives found
-                      </div>
-                    ) : (
-                      salesExecOptions.map((exec) => (
-                        <div
-                          key={exec.id}
-                          onClick={() => {
-                            setSelectedSalesExec({ userId: exec.id, name: exec.name, email: exec.email });
-                            setSalesExecSearch(exec.name);
-                            setIsSalesExecOpen(false);
-                            setSalesExecOptions([]);
-                          }}
-                          className="p-4 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 cursor-pointer border-b border-gray-50 dark:border-white/5 last:border-0 transition-colors"
-                        >
-                          <div className="font-bold text-sm text-gray-800 dark:text-gray-100">{exec.name}</div>
-                          <div className="text-[10px] text-gray-400 font-bold mt-0.5">{exec.email}</div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {selectedSalesExec && (
-                <div className="mt-3 flex items-center gap-3 px-1">
-                  <span className="text-[9px] font-black uppercase text-gray-400">Assigned:</span>
-                  <span className="text-[11px] font-bold text-gray-700 dark:text-gray-200">{selectedSalesExec.name}</span>
-                  <span className="text-[10px] text-gray-400">{selectedSalesExec.email}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Reset to current logged-in user
-                      if (currentUserProfile) {
-                        setSelectedSalesExec({ userId: currentUserProfile.id, name: currentUserProfile.name, email: currentUserProfile.email });
-                        setSalesExecSearch(currentUserProfile.name);
-                      }
-                    }}
-                    className="ml-auto text-[9px] font-black uppercase text-blue-500 hover:text-blue-700 transition-colors"
-                  >
-                    Reset to Me
-                  </button>
-                </div>
-              )}
             </section>
 
             {/* SECTION 5: INVOICE INFORMATION */}

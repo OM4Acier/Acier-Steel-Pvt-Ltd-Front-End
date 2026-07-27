@@ -417,7 +417,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       if (changes.details.invoiceNo !== undefined) payload.details.invoiceNo = changes.details.invoiceNo;
       if (changes.details.invoiceIssueDate !== undefined) payload.details.invoiceIssueDate = changes.details.invoiceIssueDate;
       if (changes.details.siteDeliveryInfo !== undefined) payload.details.siteDeliveryInfo = changes.details.siteDeliveryInfo;
-      if (changes.details.weightScaleType) payload.details.weightScaleType = changes.details.weightScaleType;
+      if (changes.details.measurementKata) payload.details.measurementKata = changes.details.measurementKata;
       if (changes.details.transportProvider) payload.details.transportProvider = changes.details.transportProvider;
       if (changes.details.transportProviderName !== undefined) payload.details.transportProviderName = changes.details.transportProviderName;
     }
@@ -883,7 +883,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
           invoiceDetails: currentOrder.details?.invoiceDetails || '',
           siteDeliveryInfo: currentOrder.details?.siteDeliveryInfo || '',
           transportProvider: currentOrder.details?.transportProvider,
-          weightScaleType: currentOrder.details?.weightScaleType,
+          measurementKata: currentOrder.details?.measurementKata,
           vehicleNo: '',
           invoiceNo: '',
           productDriveIds: [],
@@ -1069,7 +1069,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                 role={currentUserProfile?.role ?? null}
                 isOperationsRole={isOperations(currentUserProfile?.role ?? null)}
                 canEditSite={canEditSiteInfo(currentUserProfile)}
-                weightScaleType={displayOrder?.details?.weightScaleType}
+                measurementKata={displayOrder?.details?.measurementKata}
                 transportProvider={displayOrder?.details?.transportProvider}
                 transportProviderName={displayOrder?.details?.transportProviderName}
                 vehicleNo={displayOrder?.details?.vehicleNo}
@@ -1113,6 +1113,10 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                 onProductAudioRemoved={handleProductAudioRemoved}
                 onDeleteUploadedFile={handleDeleteUploadedFile}
                 onUploadComplete={handleUploadComplete}
+                transportProvider={displayOrder?.details?.transportProvider}
+                transportProviderName={displayOrder?.details?.transportProviderName}
+                measurementKata={displayOrder?.details?.measurementKata}
+                customerPaymentStatus={displayOrder?.customerPaymentStatus}
               />
 
               {!isOperations(currentUserProfile?.role ?? null) && (

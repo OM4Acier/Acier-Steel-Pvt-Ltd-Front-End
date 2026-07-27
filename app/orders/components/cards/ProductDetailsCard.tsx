@@ -4,17 +4,24 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { File, Upload, X, ChevronDown, ChevronUp, Eye, Trash2 } from 'lucide-react';
+import { File, Upload, X, ChevronDown, ChevronUp, Eye, Trash2, Truck, Gauge, CreditCard } from 'lucide-react';
 import { renderMarkdownText } from '@/components/markdownRenderer';
 import { handleDragOver, handleDragLeave, handleDrop } from '../../fileUtils';
 import { canEditSalesSpecificFields } from '../../permissions';
 import AudioManager from '@/components/AudioManager';
 import { RichTextarea } from '@/components/RichTextarea';
 import { ProductDetailsCardProps } from './cardTypes';
+import { TRANSPORT_PROVIDER_LABELS, MEASUREMENT_KATA_LABELS } from '../../types';
 
 // Stable empty-array reference so AudioManager's memoized `pendingFiles` prop
 // identity doesn't change on every render while the card isn't in edit mode.
 const EMPTY_AUDIO_FILES: File[] = [];
+
+const PAYMENT_LABELS: Record<string, string> = {
+  regular: 'Regular Account',
+  'new-paid': 'New - Prepaid',
+  'new-unpaid': 'New - Unpaid',
+};
 
 const ProductDetailsCard: React.FC<ProductDetailsCardProps> = ({
   isEditMode, role, currentUserProfile, products, deoNo,
@@ -24,8 +31,23 @@ const ProductDetailsCard: React.FC<ProductDetailsCardProps> = ({
   onProductFileAdd, onProductFileRemove,
   onProductAudioStaged, onProductAudioRemoved,
   onDeleteUploadedFile, onUploadComplete,
+  transportProvider, transportProviderName,
+  measurementKata, customerPaymentStatus,
 }) => {
   const pendingAudioFiles = isEditMode ? pendingProductAudioFiles : EMPTY_AUDIO_FILES;
+
+  // Real-time derived display values (recomputed every render from props).
+  const transportDisplay = transportProvider
+    ? TRANSPORT_PROVIDER_LABELS[transportProvider] ||
+      (transportProvider === 'Porter' ? 'Porter' : String(transportProvider))
+    : '—';
+  const transportLabel = transportProvider === 'own' && transportProviderName
+    ? `${transportDisplay} - ${transportProviderName}`
+    : transportDisplay;
+  const kataLabel = measurementKata ? MEASUREMENT_KATA_LABELS[measurementKata] : '—';
+  const paymentLabel = customerPaymentStatus
+    ? PAYMENT_LABELS[customerPaymentStatus] || customerPaymentStatus
+    : '—';
 
   return (
     <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
@@ -50,6 +72,37 @@ const ProductDetailsCard: React.FC<ProductDetailsCardProps> = ({
             dangerouslySetInnerHTML={{ __html: renderMarkdownText(products || 'N/A') }}
           />
         )}
+      </div>
+
+      {/* Real-time live data — Transit Provider, Kata, Payment */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+        <div className="rounded-lg border border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-950/40 p-3">
+          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-violet-700 dark:text-violet-300">
+            <Truck className="w-3.5 h-3.5" />
+            Transit Provider
+          </div>
+          <div className="text-sm font-bold text-violet-900 dark:text-violet-100 mt-1 truncate">
+            {transportLabel}
+          </div>
+        </div>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40 p-3">
+          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">
+            <Gauge className="w-3.5 h-3.5" />
+            Kata
+          </div>
+          <div className="text-sm font-bold text-blue-900 dark:text-blue-100 mt-1 truncate">
+            {kataLabel}
+          </div>
+        </div>
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40 p-3">
+          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+            <CreditCard className="w-3.5 h-3.5" />
+            Payment
+          </div>
+          <div className="text-sm font-bold text-emerald-900 dark:text-emerald-100 mt-1 truncate">
+            {paymentLabel}
+          </div>
+        </div>
       </div>
 
       {/* Audio Manager Component */}

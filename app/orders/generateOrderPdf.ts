@@ -339,7 +339,7 @@ export function buildOrderPdfHtml(
   // ── Delivery block ────────────────────────────────────────────
   const deliveryRows: string[] = [];
   if (show('vehicleNo', v)) deliveryRows.push(row('Vehicle No.', escHtml(d?.vehicleNo) || 'N/A'));
-  if (show('weightScaleType', v)) deliveryRows.push(row('Weight Scale', d?.weightScaleType ? (d.weightScaleType.charAt(0).toUpperCase() + d.weightScaleType.slice(1)) : 'N/A'));
+  if (show('measurementKata', v)) deliveryRows.push(row('Measurement Kata', d?.measurementKata ? (d.measurementKata.charAt(0).toUpperCase() + d.measurementKata.slice(1)) : 'N/A'));
   if (show('transportProvider', v)) deliveryRows.push(row('Transport', formatTransportProvider(d?.transportProvider, d?.transportProviderName)));
   if (show('siteDeliveryInfo', v)) deliveryRows.push(row('Site Delivery Info', d?.siteDeliveryInfo ? `<div class="markdown-content">${renderMarkdownText(d.siteDeliveryInfo)}</div>` : 'N/A', true));
 

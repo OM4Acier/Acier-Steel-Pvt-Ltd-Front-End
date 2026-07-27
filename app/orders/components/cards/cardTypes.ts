@@ -1,6 +1,6 @@
 // app/orders/components/cards/cardTypes.ts
 import React from 'react';
-import { OrderStatus, CustomerPaymentStatus, TransportProvider, WeightScaleType } from '../../types';
+import { OrderStatus, CustomerPaymentStatus, TransportProvider, MeasurementKata } from '../../types';
 import { UserRole, UserProfile } from '@/types/rbac.types';
 
 // Generic text-input change handler (id-driven, same contract as handleTextChange)
@@ -31,7 +31,7 @@ export interface DeliveryVehicleCardProps {
   role: UserRole | null;
   isOperationsRole: boolean;
   canEditSite: boolean;
-  weightScaleType?: WeightScaleType;
+  measurementKata?: MeasurementKata;
   transportProvider?: TransportProvider;
   transportProviderName?: string;
   vehicleNo?: string;
@@ -70,6 +70,11 @@ export interface ProductDetailsCardProps {
   onProductAudioRemoved: (index: number) => void;
   onDeleteUploadedFile: (fileId: string, stage: 'product') => void;
   onUploadComplete: () => void;
+  // Real-time values mirrored into the products text (live, recomputed on change)
+  transportProvider?: TransportProvider;
+  transportProviderName?: string;
+  measurementKata?: MeasurementKata;
+  customerPaymentStatus?: CustomerPaymentStatus;
 }
 
 export interface InvoiceDetailsCardProps {

@@ -27,11 +27,15 @@ export interface UserProfile {
 }
 
 export type CustomerPaymentStatus = 'regular' | 'new-paid' | 'new-unpaid';
-export type WeightScaleType = 'outside' | 'inside';
-export type TransportProvider = 'client' | 'porter' | 'own';
+export type MeasurementKata = 'prince' | 'factory';
+export const MEASUREMENT_KATA_LABELS: Record<MeasurementKata, string> = {
+  prince: 'Prince Kata',
+  factory: 'Factory Kata',
+};
+export type TransportProvider = 'client' | 'Porter' | 'own';
 export const TRANSPORT_PROVIDER_LABELS: Record<TransportProvider, string> = {
   client: 'Client Transport',
-  porter: 'Porter',
+  Porter: 'Porter',
   own: 'Own Transport',
 };
 export type OrderStatus = 
@@ -45,7 +49,7 @@ export type OrderStatus =
 
 export interface OrderDetails {
   siteDeliveryInfo?: string;
-  weightScaleType?: WeightScaleType;
+  measurementKata?: MeasurementKata;
   transportProvider?: TransportProvider;
   transportProviderName?: string;
   orderDate?: string;
