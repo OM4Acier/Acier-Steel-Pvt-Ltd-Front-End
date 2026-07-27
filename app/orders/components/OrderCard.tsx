@@ -18,8 +18,8 @@ import {
 import { Order, TransportProvider } from '../types';
 
 const TRANSPORT_STYLES: Record<TransportProvider, { label: string; tagColor: string; badgeClass: string; borderClass: string }> = {
-  poter: {
-    label: 'Poter',
+  porter: {
+    label: 'Porter',
     tagColor: 'bg-violet-600',
     badgeClass: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300',
     borderClass: 'border-0 border-violet-500 shadow-lg shadow-violet-500/30',

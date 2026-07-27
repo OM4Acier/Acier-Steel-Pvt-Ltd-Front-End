@@ -17,10 +17,25 @@ import { Building2, Edit2, Trash2 } from 'lucide-react';
 
 export type DialogMode = 'view' | 'edit' | 'create';
 
+export interface CustomerDefaultValues {
+  name?: string;
+  contactPerson?: string;
+  phone?: string;
+  gst?: string;
+  address?: string;
+  shipTo?: {
+    name?: string;
+    phone?: string;
+    gst?: string;
+    address?: string;
+  };
+}
+
 interface CustomerDialogProps {
   isOpen: boolean;
   mode: DialogMode;
   customer?: CustomerSummary | null;
+  initialCustomerValues?: CustomerDefaultValues | null;
   onClose: () => void;
   onSuccess: (customer: CustomerSummary) => void;
   /** Signals page to switch dialogState.mode → 'edit' */
@@ -55,6 +70,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   isOpen,
   mode,
   customer,
+  initialCustomerValues,
   onClose,
   onSuccess,
   onEdit,
@@ -94,6 +110,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         <div className="px-10 py-4 overflow-y-auto dialog-custom-scrollbar bg-white dark:bg-gray-900 flex-1">
           <CustomerForm
             customer={customer}
+            initialCustomerValues={initialCustomerValues}
             readOnly={mode === 'view'}
             onSuccess={onSuccess}
             onCancel={onClose}

@@ -10,15 +10,19 @@ import {
   customersApi,
   CreateCustomerPayload,
   CustomerSummary,
+  ShippingAddressInput,
 } from '@/lib/api/endpoints/customers';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { createCustomerSchema } from '@/lib/validations/customer.schema';
 
+import { CustomerDefaultValues } from './CustomerDialog';
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface CustomerFormProps {
   customer?: CustomerSummary | null;
+  initialCustomerValues?: CustomerDefaultValues | null;
   /** When true: all inputs are read-only and action buttons are hidden */
   readOnly?: boolean;
   onSuccess: (customer: CustomerSummary) => void;
@@ -44,6 +48,7 @@ const S = {
 
 export const CustomerForm: React.FC<CustomerFormProps> = ({
   customer,
+  initialCustomerValues,
   readOnly = false,
   onSuccess,
   onCancel,
@@ -52,13 +57,24 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isAddressLoading, setIsAddressLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [formData, setFormData] = useState<CreateCustomerPayload>({
-    name: customer?.name || '',
-    gst: customer?.gst || '',
-    pan: customer?.pan || '',
-    phones: customer?.phones?.length ? customer?.phones : [''],
-    billingAddress: '',
-    shippingAddresses: [],
+  const [formData, setFormData] = useState<CreateCustomerPayload>(() => {
+    const defaultShipping: ShippingAddressInput[] = [];
+    if (initialCustomerValues?.shipTo?.address) {
+      defaultShipping.push({
+        label: initialCustomerValues.shipTo.name || 'Ship To',
+        address: initialCustomerValues.shipTo.address,
+      });
+    }
+    return {
+      name: customer?.name || initialCustomerValues?.name || '',
+      gst: customer?.gst || initialCustomerValues?.gst || '',
+      pan: customer?.pan || '',
+      phones: customer?.phones?.length
+        ? customer.phones
+        : (initialCustomerValues?.phone ? [initialCustomerValues.phone] : ['']),
+      billingAddress: initialCustomerValues?.address || '',
+      shippingAddresses: defaultShipping,
+    };
   });
 
   // ─── Fetch full details when viewing/editing an existing customer ──────────

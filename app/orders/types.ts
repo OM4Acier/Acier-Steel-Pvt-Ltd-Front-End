@@ -28,10 +28,10 @@ export interface UserProfile {
 
 export type CustomerPaymentStatus = 'regular' | 'new-paid' | 'new-unpaid';
 export type WeightScaleType = 'outside' | 'inside';
-export type TransportProvider = 'client' | 'poter' | 'own';
+export type TransportProvider = 'client' | 'porter' | 'own';
 export const TRANSPORT_PROVIDER_LABELS: Record<TransportProvider, string> = {
   client: 'Client Transport',
-  poter: 'Poter',
+  porter: 'Porter',
   own: 'Own Transport',
 };
 export type OrderStatus = 
@@ -67,6 +67,36 @@ export interface EditHistoryEntry {
   description: string;
 }
 
+export interface OrganizationContactDetails {
+  userId?: string;
+  name?: string;
+  email?: string;
+}
+
+export interface QuotationLineItem {
+  itemName: string;
+  description?: string;
+  price?: string | number;
+  unit?: string;
+}
+
+export interface QuotationPrefillPayload {
+  qno?: string;
+  cName?: string;
+  cContact?: string;
+  cPhone?: string;
+  cGstin?: string;
+  cAddr?: string;
+  shipSame?: boolean;
+  sName?: string;
+  sPhone?: string;
+  sGst?: string;
+  sAddr?: string;
+  inqSrc?: string;
+  salesExec?: string;
+  items?: QuotationLineItem[];
+}
+
 export interface Order {
   //timestamp: string | number | Date;
   id?: string;
@@ -74,6 +104,7 @@ export interface Order {
   client: string;
   contactNo: string;
   organizationContact: string;
+  organizationContactDetails?: OrganizationContactDetails;
   customerPaymentStatus: CustomerPaymentStatus;
   products: string;
   status?: OrderStatus;
@@ -83,6 +114,7 @@ export interface Order {
   editHistory?: EditHistoryEntry[];
   createdAt?: string;
   updatedAt?: string;
+  quotationNo?: string;
 }
 
 export interface DialogMessageType {

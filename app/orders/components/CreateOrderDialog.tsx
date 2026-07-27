@@ -42,6 +42,7 @@ import { CustomerPaymentStatus, DeoNumbersByPrefix, DialogMessageType, Order, We
 import { ordersApi } from '@/lib/api/endpoints/ordersApi';
 const apiService = ordersApi;
 import { customersApi, CustomerSummary } from '@/lib/api/endpoints/customers';
+import { usersApi } from '@/lib/api/endpoints/users';
 import { UserProfile } from '@/types/rbac.types';
 import { handleDrop } from '../fileUtils';
 import { validateOrderData } from '../orderUtils';
@@ -52,6 +53,8 @@ import { RichTextarea } from '@/components/RichTextarea';
 // ─── Updated import: also brings in DialogMode type ──────────────────────────
 import { CustomerDialog, DialogMode } from '../../customers/components/CustomerDialog';
 
+import { QuotationPrefillPayload } from '../types';
+
 interface CreateOrderDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -60,6 +63,7 @@ interface CreateOrderDialogProps {
   fetchDeoNumbers: () => Promise<void>;
   onOrderCreated: () => void;
   onShowMessage: (message: DialogMessageType) => void;
+  prefillFromQuotation?: QuotationPrefillPayload | null;
 }
 
 export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
@@ -70,6 +74,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   fetchDeoNumbers,
   onOrderCreated,
   onShowMessage,
+  prefillFromQuotation,
 }) => {
   const initialOrderData: Partial<Order> = {
     deoNo: '',
@@ -113,6 +118,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState<CustomerSummary | null>(null);
   const [customerDialogMode, setCustomerDialogMode] = useState<DialogMode>('create');
+  const [initialCustomerValues, setInitialCustomerValues] = useState<any>(null);
 
   const [clientSearchTerm, setClientSearchTerm] = useState('');
   const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
@@ -124,11 +130,123 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   const [injectedBillingText, setInjectedBillingText] = useState('');
   const [injectedShippingText, setInjectedShippingText] = useState('');
   const [selectedShippingAddress, setSelectedShippingAddress] = useState<string>('Ask for client');
+
+  // ─── salesExecutive State ───────────────────────────────────────────────────
+  const [salesExecSearch, setSalesExecSearch] = useState('');
+  const [salesExecOptions, setSalesExecOptions] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [selectedSalesExec, setSelectedSalesExec] = useState<{ userId?: string; name?: string; email?: string } | null>(null);
+  const [isSalesExecLoading, setIsSalesExecLoading] = useState(false);
+  const [salesExecNoMatches, setSalesExecNoMatches] = useState(false);
+  const [isSalesExecOpen, setIsSalesExecOpen] = useState(false);
+
   const [uploadProgress, setUploadProgress] = useState<{
     total: number;
     completed: number;
     current: string;
   }>({ total: 0, completed: 0, current: '' });
+
+  // ─── Initialize salesExecutive default ──────────────────────────────────────
+  React.useEffect(() => {
+    if (currentUserProfile && !selectedSalesExec) {
+      const defaultExec = {
+        userId: currentUserProfile.id,
+        name: currentUserProfile.name,
+        email: currentUserProfile.email,
+      };
+      setSelectedSalesExec(defaultExec);
+      setSalesExecSearch(currentUserProfile.name);
+    }
+  }, [currentUserProfile, selectedSalesExec]);
+
+  // ─── Search salesExecutives ─────────────────────────────────────────────────
+  const handleSalesExecSearch = async (query: string) => {
+    setSalesExecSearch(query);
+    setSalesExecNoMatches(false);
+    if (!query.trim()) {
+      setSalesExecOptions([]);
+      return;
+    }
+    setIsSalesExecLoading(true);
+    try {
+      // Endpoint /admin/users or cached sales-exec search
+      const users = await usersApi.getUsers();
+      const filtered = users
+        .filter((u) => u.name.toLowerCase().includes(query.toLowerCase()) || u.email.toLowerCase().includes(query.toLowerCase()))
+        .map((u) => ({ id: u.clerkId, name: u.name, email: u.email }));
+      setSalesExecOptions(filtered);
+      setSalesExecNoMatches(filtered.length === 0);
+    } catch (err) {
+      console.error('Failed to search sales executives', err);
+      // Fallback: keep existing selected user or fallback to logged-in user
+    } finally {
+      setIsSalesExecLoading(false);
+    }
+  };
+
+  // ─── Prefill from Quotation Effect ──────────────────────────────────────────
+  React.useEffect(() => {
+    if (!isOpen || !prefillFromQuotation) return;
+
+    // 1. Search client term
+    if (prefillFromQuotation.cName) {
+      setClientSearchTerm(prefillFromQuotation.cName);
+      setOrderData((prev) => ({ ...prev, client: prefillFromQuotation.cName }));
+    }
+
+    // 2. Prepare initialCustomerValues for CustomerDialog create-mode prefill
+    setInitialCustomerValues({
+      name: prefillFromQuotation.cName,
+      contactPerson: prefillFromQuotation.cContact,
+      phone: prefillFromQuotation.cPhone,
+      gst: prefillFromQuotation.cGstin,
+      address: prefillFromQuotation.cAddr,
+      shipTo: prefillFromQuotation.shipSame === false ? {
+        name: prefillFromQuotation.sName,
+        phone: prefillFromQuotation.sPhone,
+        gst: prefillFromQuotation.sGst,
+        address: prefillFromQuotation.sAddr,
+      } : undefined,
+    });
+
+    // 3. Product items go ONLY into invoiceDetails (prepended at top); products field is left for the operator to fill manually.
+    if (prefillFromQuotation.items && prefillFromQuotation.items.length > 0) {
+      let productBlock = '';
+      prefillFromQuotation.items.forEach((item: any, idx: number) => {
+        const itemNum = idx + 1;
+        const prodName = item.description ? `${item.itemName} (${item.description})` : item.itemName;
+        const rate = item.price ? item.price : '[rate]';
+        if (idx === 0) {
+          productBlock += `**PRODUCTS:**\n1. ${prodName}\n   Quantity = [qty]\n   Price = ${rate} + GST\n`;
+        } else {
+          productBlock += `${itemNum}. ${prodName}\n   Quantity = [qty]\n   Price = ${rate} + GST\n`;
+        }
+      });
+      if (productBlock) {
+        const trimmed = productBlock.trim();
+        setOrderData((prev) => ({
+          ...prev,
+          // products field intentionally untouched — operator fills it
+          details: {
+            ...prev.details!,
+            invoiceDetails: prev.details?.invoiceDetails
+              ? `${trimmed}\n\n${prev.details.invoiceDetails}`
+              : trimmed,
+          },
+        }));
+      }
+    }
+
+    // 4. Handle salesExec suggestion prefill search
+    if (prefillFromQuotation.salesExec) {
+      setSalesExecSearch(prefillFromQuotation.salesExec);
+      handleSalesExecSearch(prefillFromQuotation.salesExec);
+    }
+
+    // Store quotationNo for traceability
+    if (prefillFromQuotation.qno) {
+      setOrderData((prev) => ({ ...prev, quotationNo: prefillFromQuotation.qno }));
+    }
+  }, [isOpen, prefillFromQuotation]);
 
   // ─── Fetch clients ────────────────────────────────────────────────────────
 
@@ -221,37 +339,27 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     setInjectedGstText(gstText);
     setInjectedShippingText(initialShippingText);
 
+    // Always insert client block at the START of invoiceDetails
     setOrderData((prev) => {
-      let currentDetails = prev.details?.invoiceDetails || '';
-      if (injectedClientText)
-        currentDetails = currentDetails
-          .replace('\n\n' + injectedClientText, '')
-          .replace(injectedClientText + '\n\n', '')
-          .replace(injectedClientText, '');
-      if (injectedGstText)
-        currentDetails = currentDetails
-          .replace('\n\n' + injectedGstText, '')
-          .replace(injectedGstText + '\n\n', '')
-          .replace(injectedGstText, '');
-      if (injectedBillingText)
-        currentDetails = currentDetails
-          .replace('\n\n' + injectedBillingText, '')
-          .replace(injectedBillingText + '\n\n', '')
-          .replace(injectedBillingText, '');
-      if (injectedShippingText)
-        currentDetails = currentDetails
-          .replace('\n\n' + injectedShippingText, '')
-          .replace(injectedShippingText + '\n\n', '')
-          .replace(injectedShippingText, '');
+      // Strip out any previously injected client/gst/billing/shipping snippets
+      let rest = prev.details?.invoiceDetails || '';
+      for (const snippet of [injectedClientText, injectedGstText, injectedBillingText, injectedShippingText]) {
+        if (!snippet) continue;
+        rest = rest
+          .replace('\n\n' + snippet, '')
+          .replace(snippet + '\n\n', '')
+          .replace(snippet, '');
+      }
 
-      const initialInjection = [clientText, gstText, initialShippingText].filter(Boolean).join('\n\n');
-      currentDetails = currentDetails ? `${currentDetails}\n\n${initialInjection}` : initialInjection;
+      const clientBlock = [clientText, gstText, initialShippingText].filter(Boolean).join('\n\n');
+      // Prepend: client block at top, then whatever was already there
+      const newDetails = rest.trim() ? `${clientBlock}\n\n${rest.trim()}` : clientBlock;
 
       return {
         ...prev,
         client: client.name,
         contactNo: client.phones?.[0] || '',
-        details: { ...prev.details!, invoiceDetails: currentDetails },
+        details: { ...prev.details!, invoiceDetails: newDetails },
       };
     });
 
@@ -268,13 +376,15 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
           const billingText = `*Billing Address*: ${addresses.billingAddress}`;
           setInjectedBillingText(billingText);
 
+          // Insert billing address right after GST (or clientText) — still at the top block
           setOrderData((prev) => {
             let currentDetails = prev.details?.invoiceDetails || '';
             const insertionPoint = gstText || clientText;
             if (currentDetails.includes(insertionPoint)) {
               currentDetails = currentDetails.replace(insertionPoint, `${insertionPoint}\n\n${billingText}`);
             } else {
-              currentDetails = currentDetails ? `${currentDetails}\n\n${billingText}` : billingText;
+              // Fallback: prepend billing at very top
+              currentDetails = currentDetails ? `${billingText}\n\n${currentDetails}` : billingText;
             }
             return { ...prev, details: { ...prev.details!, invoiceDetails: currentDetails } };
           });
@@ -605,6 +715,11 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
       const orderToCreate = {
         ...orderData,
         organizationContact: currentUserProfile.email,
+        organizationContactDetails: selectedSalesExec || {
+          userId: currentUserProfile.id,
+          name: currentUserProfile.name,
+          email: currentUserProfile.email,
+        },
       } as any;
       const createdOrder = await apiService.addOrder(orderToCreate);
       setCreatedOrderDeoNo(createdOrder.deoNo);
@@ -663,6 +778,12 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
               </div>
             </div>
           </DialogHeader>
+
+          {prefillFromQuotation?.qno && (
+            <div className="mx-8 mt-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold flex items-center justify-between">
+              <span>Prefilled from Quotation #{prefillFromQuotation.qno}</span>
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-8 space-y-5 dialog-custom-scrollbar">
 
@@ -1179,7 +1300,88 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
               </div>
             </section>
 
-            {/* SECTION 4: INVOICE INFORMATION */}
+            {/* SECTION 4: ORGANIZATION CONTACT (Sales Executive) */}
+            <section className={sectionCardClass}>
+              <h3 className={sectionLabelClass}>
+                <Users className="w-3.5 h-3.5" /> Organization Contact
+              </h3>
+              <div className="relative">
+                <div className="flex gap-3">
+                  <div className="relative flex-1 group">
+                    <Input
+                      id="salesExecSearch"
+                      value={salesExecSearch}
+                      onChange={(e) => handleSalesExecSearch(e.target.value)}
+                      onFocus={() => setIsSalesExecOpen(true)}
+                      onBlur={() => setTimeout(() => setIsSalesExecOpen(false), 200)}
+                      placeholder="Search sales executive by name or email..."
+                      className={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm focus:ring-4 focus:ring-blue-500/5 transition-all text-sm font-bold`}
+                    />
+                    {isSalesExecLoading && (
+                      <Loader2 className="absolute right-4 top-4 w-4 h-4 animate-spin text-blue-400" />
+                    )}
+                  </div>
+                  {selectedSalesExec && (
+                    <div className={`${inputHeight} px-5 flex items-center gap-2 rounded-2xl bg-blue-500/5 border border-blue-100 dark:border-blue-900/30 text-blue-600 text-[11px] font-black uppercase tracking-tight shrink-0`}>
+                      <Check className="w-3.5 h-3.5" />
+                      {selectedSalesExec.name || selectedSalesExec.email}
+                    </div>
+                  )}
+                </div>
+
+                {isSalesExecOpen && (salesExecOptions.length > 0 || salesExecNoMatches) && (
+                  <div
+                    className="absolute z-[10002] top-full left-0 w-full mt-2 bg-white dark:bg-gray-800 shadow-2xl rounded-[1.5rem] border border-gray-100 dark:border-white/10 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    {salesExecNoMatches ? (
+                      <div className="p-6 text-center text-[11px] font-black text-gray-400 uppercase">
+                        No matching executives found
+                      </div>
+                    ) : (
+                      salesExecOptions.map((exec) => (
+                        <div
+                          key={exec.id}
+                          onClick={() => {
+                            setSelectedSalesExec({ userId: exec.id, name: exec.name, email: exec.email });
+                            setSalesExecSearch(exec.name);
+                            setIsSalesExecOpen(false);
+                            setSalesExecOptions([]);
+                          }}
+                          className="p-4 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 cursor-pointer border-b border-gray-50 dark:border-white/5 last:border-0 transition-colors"
+                        >
+                          <div className="font-bold text-sm text-gray-800 dark:text-gray-100">{exec.name}</div>
+                          <div className="text-[10px] text-gray-400 font-bold mt-0.5">{exec.email}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {selectedSalesExec && (
+                <div className="mt-3 flex items-center gap-3 px-1">
+                  <span className="text-[9px] font-black uppercase text-gray-400">Assigned:</span>
+                  <span className="text-[11px] font-bold text-gray-700 dark:text-gray-200">{selectedSalesExec.name}</span>
+                  <span className="text-[10px] text-gray-400">{selectedSalesExec.email}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Reset to current logged-in user
+                      if (currentUserProfile) {
+                        setSelectedSalesExec({ userId: currentUserProfile.id, name: currentUserProfile.name, email: currentUserProfile.email });
+                        setSalesExecSearch(currentUserProfile.name);
+                      }
+                    }}
+                    className="ml-auto text-[9px] font-black uppercase text-blue-500 hover:text-blue-700 transition-colors"
+                  >
+                    Reset to Me
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {/* SECTION 5: INVOICE INFORMATION */}
             <section className={sectionCardClass}>
               <h3 className={sectionLabelClass}>
                 <Zap className="w-3.5 h-3.5" /> Invoice Information
@@ -1193,7 +1395,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                     id="invoiceDetails"
                     value={orderData.details?.invoiceDetails || ''}
                     onChange={handleChange}
-                    rows={3}
+                    rows={5}
                     placeholder="e.g., *Due: 2025-06-30*, Payment Terms: 30 days. Balance: ₹{{100000 - 50000}}"
                     className="rounded-[1.5rem] border-gray-100 shadow-sm text-sm"
                     enableAutocomplete={true}
@@ -1297,6 +1499,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
           isOpen={isCustomerDialogOpen}
           mode={customerDialogMode}
           customer={customerToEdit}
+          initialCustomerValues={initialCustomerValues}
           onClose={handleCustomerDialogClose}
           onSuccess={handleCustomerSuccess}
           onEdit={handleCustomerDialogEdit}

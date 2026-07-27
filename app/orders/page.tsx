@@ -127,13 +127,77 @@ export default function OrdersView() {
   }, [clerkUser, role]);
 
 
+  const [prefillFromQuotation, setPrefillFromQuotation] = useState<any>(null);
+
   useEffect(() => {
     if (searchParams.get('action') === 'create') {
+      // Safely parse incoming quotation query parameters
+      const qno = searchParams.get('qno') || undefined;
+      const cName = searchParams.get('cName') || undefined;
+      const cContact = searchParams.get('cContact') || undefined;
+      const cPhone = searchParams.get('cPhone') || undefined;
+      const cGstin = searchParams.get('cGstin') || undefined;
+      const cAddr = searchParams.get('cAddr') || undefined;
+      const shipSame = searchParams.get('shipSame') === 'false' ? false : true;
+      const sName = searchParams.get('sName') || undefined;
+      const sPhone = searchParams.get('sPhone') || undefined;
+      const sGst = searchParams.get('sGst') || undefined;
+      const sAddr = searchParams.get('sAddr') || undefined;
+      const inqSrc = searchParams.get('inqSrc') || undefined;
+      const salesExec = searchParams.get('salesExec') || undefined;
+
+      let items: any[] = [];
+      const itemsRaw = searchParams.get('items');
+      if (itemsRaw) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(itemsRaw));
+          if (Array.isArray(parsed)) {
+            items = parsed.slice(0, 15);
+          }
+        } catch (e) {
+          console.error('Failed to parse items from URL query parameter', e);
+        }
+      }
+
+      setPrefillFromQuotation({
+        qno,
+        cName,
+        cContact,
+        cPhone,
+        cGstin,
+        cAddr,
+        shipSame,
+        sName,
+        sPhone,
+        sGst,
+        sAddr,
+        inqSrc,
+        salesExec,
+        items,
+      });
+
       setIsCreateOrderDialogOpen(true);
 
-      // Remove 'action=create' from the URL so it can be triggered again without refresh
+      // Cleanly remove action and all quotation params from address bar
       const params = new URLSearchParams(searchParams.toString());
-      params.delete('action');
+      [
+        'action',
+        'qno',
+        'cName',
+        'cContact',
+        'cPhone',
+        'cGstin',
+        'cAddr',
+        'shipSame',
+        'sName',
+        'sPhone',
+        'sGst',
+        'sAddr',
+        'inqSrc',
+        'salesExec',
+        'items',
+      ].forEach((p) => params.delete(p));
+
       const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
       router.replace(newUrl, { scroll: false });
     }
@@ -359,7 +423,11 @@ export default function OrdersView() {
       {/* Dialogs */}
       <CreateOrderDialog
         isOpen={isCreateOrderDialogOpen}
-        onClose={() => setIsCreateOrderDialogOpen(false)}
+        onClose={() => {
+          setIsCreateOrderDialogOpen(false);
+          setPrefillFromQuotation(null);
+        }}
+        prefillFromQuotation={prefillFromQuotation}
         currentUserProfile={currentUserProfile}
 
         nextDeoNumbers={nextDeoNumbers}
