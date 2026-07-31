@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { File, Upload, X, ChevronDown, ChevronUp, Eye, Trash2, Truck, Gauge, CreditCard } from 'lucide-react';
+import { File, Upload, X, ChevronDown, ChevronUp, Eye, Trash2 } from 'lucide-react';
 import { renderMarkdownText } from '@/components/markdownRenderer';
 import { handleDragOver, handleDragLeave, handleDrop } from '../../fileUtils';
 import { canEditSalesSpecificFields } from '../../permissions';
@@ -67,42 +67,19 @@ const ProductDetailsCard: React.FC<ProductDetailsCardProps> = ({
             placeholder="Enter product details..."
           />
         ) : (
-          <div
-            className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap p-2 border rounded-md min-h-[120px]"
-            dangerouslySetInnerHTML={{ __html: renderMarkdownText(products || 'N/A') }}
-          />
+          <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap p-2 border rounded-md min-h-[120px]">
+            <div
+              className="prose prose-xs dark:prose-invert max-w-none text-gray-800 dark:text-gray-200"
+              dangerouslySetInnerHTML={{ __html: renderMarkdownText(products || 'N/A') }}
+            />
+            {/* Auto-appended plain-text live values (view mode only; NOT sent to server) */}
+            {(transportLabel || kataLabel || paymentLabel) && (
+              <pre className="mt-3 pt-2 border-t border-gray-300 dark:border-gray-600 whitespace-pre-wrap font-mono text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+{`*Transit Provider*: ${transportLabel}\n*Kata*: ${kataLabel}\n*Payment*: ${paymentLabel}`}
+              </pre>
+            )}
+          </div>
         )}
-      </div>
-
-      {/* Real-time live data — Transit Provider, Kata, Payment */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
-        <div className="rounded-lg border border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-950/40 p-3">
-          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-violet-700 dark:text-violet-300">
-            <Truck className="w-3.5 h-3.5" />
-            Transit Provider
-          </div>
-          <div className="text-sm font-bold text-violet-900 dark:text-violet-100 mt-1 truncate">
-            {transportLabel}
-          </div>
-        </div>
-        <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40 p-3">
-          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">
-            <Gauge className="w-3.5 h-3.5" />
-            Kata
-          </div>
-          <div className="text-sm font-bold text-blue-900 dark:text-blue-100 mt-1 truncate">
-            {kataLabel}
-          </div>
-        </div>
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40 p-3">
-          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
-            <CreditCard className="w-3.5 h-3.5" />
-            Payment
-          </div>
-          <div className="text-sm font-bold text-emerald-900 dark:text-emerald-100 mt-1 truncate">
-            {paymentLabel}
-          </div>
-        </div>
       </div>
 
       {/* Audio Manager Component */}

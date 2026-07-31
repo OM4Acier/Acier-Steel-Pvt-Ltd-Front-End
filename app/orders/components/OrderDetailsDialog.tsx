@@ -44,6 +44,8 @@ import {
 import { openOrderPdfInNewTab } from '../generateOrderPdf';
 import { PdfConfigModal } from './PdfConfigModal';
 import { UserProfile } from '@/types/rbac.types';
+import { CustomerDialog } from '../../customers/components/CustomerDialog';
+import { customersApi, CustomerSummary } from '@/lib/api/endpoints/customers';
 
 // Formats a Date/timestamp to a local `YYYY-MM-DD` string (avoids UTC off-by-one near midnight).
 const toLocalISODate = (value: string | Date): string => {
@@ -117,7 +119,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   const [invoiceSectionOpen, setInvoiceSectionOpen] = useState(false);
   const [isAdditionalInfoOpen, setAdditionalInfoOpen] = useState(false);
 
-
+  // Single source of truth for displayed data
   // Single source of truth for displayed data
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
 
@@ -172,6 +174,47 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     setMergePreviews({});
   };
 
+  // ── Customer edit (billing / shipping / contact) from order context ──────
+  // Restricted: only contacts / addresses are editable; name/GST/PAN stay locked.
+  const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
+  const [resolvedCustomer, setResolvedCustomer] = useState<CustomerSummary | null>(null);
+  const [isResolvingCustomer, setIsResolvingCustomer] = useState(false);
+
+  const handleEditCustomer = () => {
+    if (resolvedCustomer) {
+      setCustomerDialogOpen(true);
+    } else if (!isResolvingCustomer) {
+      resolveCustomer();
+    }
+  };
+
+  const resolveCustomer = React.useCallback(async () => {
+    if (!currentOrder?.client) return;
+    setIsResolvingCustomer(true);
+    try {
+      const clients = await customersApi.fetchCustomers();
+      // Match by name. The client field on the order is the customer's name.
+      const match = clients.find((c) => c.name === currentOrder.client) || null;
+      setResolvedCustomer(match);
+      setCustomerDialogOpen(true);
+    } catch (err) {
+      console.error('Failed to resolve customer for edit', err);
+    } finally {
+      setIsResolvingCustomer(false);
+    }
+  }, [currentOrder?.client]);
+
+  React.useEffect(() => {
+    if (order && isOpen) {
+      setResolvedCustomer(null);
+    }
+  }, [order, isOpen]);
+
+  const handleCustomerSuccess = (updated: CustomerSummary) => {
+    setResolvedCustomer(updated);
+    setCustomerDialogOpen(false);
+    onOrderUpdated();
+  };
 
   // Compute display order (merge current + pending)
   const displayOrder = React.useMemo(() => {
@@ -1061,6 +1104,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                 onPartDeliveryChange={onPartDeliveryChange}
                 onHighPriorityChange={onHighPriorityChange}
                 onStatusSelectChange={onStatusSelectChange}
+                onEditCustomer={handleEditCustomer}
               />
 
               {/* Delivery & Vehicle Details Card - CLEAN WHITE REDESIGN */}
@@ -1238,6 +1282,18 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
           }}
         />
       )}
+
+      {/* Customer (billing / shipping / contact) edit — restricted to contacts only */}
+      <CustomerDialog
+        isOpen={customerDialogOpen}
+        mode="edit"
+        customer={resolvedCustomer}
+        restrictIdentityFields={true}
+        onClose={() => setCustomerDialogOpen(false)}
+        onSuccess={handleCustomerSuccess}
+        onEdit={() => {}}
+        onDelete={() => {}}
+      />
     </>
   );
 };

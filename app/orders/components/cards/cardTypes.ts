@@ -24,6 +24,8 @@ export interface ClientStatusCardProps {
   onPartDeliveryChange: (checked: boolean) => void;
   onHighPriorityChange: (checked: boolean) => void;
   onStatusSelectChange: (value: string) => void;
+  /** Opens the customer (billing/shipping/contact) edit dialog. */
+  onEditCustomer: () => void;
 }
 
 export interface DeliveryVehicleCardProps {

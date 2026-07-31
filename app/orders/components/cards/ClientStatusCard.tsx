@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import {
   User as UserIcon, Phone, MessageCircle, Calendar, Package, Zap,
-  DollarSign, History, ChevronDown, ChevronUp,
+  DollarSign, History, ChevronDown, ChevronUp, Edit2,
 } from 'lucide-react';
 import {
   canEditSalesSpecificFields, canEditOperationsSpecificFields, isOperations,
@@ -24,6 +24,7 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
   organizationContact, partDelivery, isHighPriority, orderDate,
   isAdditionalInfoOpen, onAdditionalInfoToggle, onTextChange,
   onPaymentStatusChange, onPartDeliveryChange, onHighPriorityChange, onStatusSelectChange,
+  onEditCustomer,
 }) => {
   return (
     <div className="bg-white dark:bg-gray-900 p-4 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 space-y-3">
@@ -93,9 +94,20 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
 
         {/* Org Contact */}
         <div className="space-y-1">
-          <Label className="font-medium flex items-center gap-1 text-sm">
-            <UserIcon className="w-4 h-4 text-gray-500" /> Org. Contact:
-          </Label>
+          <div className="flex items-center justify-between">
+            <Label className="font-medium flex items-center gap-1 text-sm">
+              <UserIcon className="w-4 h-4 text-gray-500" /> Org. Contact:
+            </Label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onEditCustomer}
+              className="h-6 px-2 rounded-md text-[10px] font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+            >
+              <Edit2 className="w-3 h-3 mr-0.5" /> Edit
+            </Button>
+          </div>
           <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 text-sm">
             {organizationContact || 'N/A'}
           </span>

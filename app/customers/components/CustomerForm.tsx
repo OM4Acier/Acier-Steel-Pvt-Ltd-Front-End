@@ -25,6 +25,13 @@ interface CustomerFormProps {
   initialCustomerValues?: CustomerDefaultValues | null;
   /** When true: all inputs are read-only and action buttons are hidden */
   readOnly?: boolean;
+  /**
+   * When true, "identity" fields (name, GST, PAN) are locked even in edit mode.
+   * Used when editing is scoped to contact / billing / shipping only — e.g.
+   * from the order details dialog where the customer record is shared across
+   * orders and we don't want one order's operator renaming the entity.
+   */
+  restrictIdentityFields?: boolean;
   onSuccess: (customer: CustomerSummary) => void;
   onCancel: () => void;
   className?: string;
@@ -50,10 +57,13 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
   customer,
   initialCustomerValues,
   readOnly = false,
+  restrictIdentityFields = false,
   onSuccess,
   onCancel,
   className,
 }) => {
+  // Effective lock state — identity fields are locked if either flag says so.
+  const identityLocked = readOnly || restrictIdentityFields;
   const [isLoading, setIsLoading] = useState(false);
   const [isAddressLoading, setIsAddressLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -231,10 +241,14 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
     setErrors({});
     setIsLoading(true);
     try {
+      // When identity fields are restricted (order-side edit) we still send
+      // the existing values so the backend can validate, but we never
+      // overwrite them. Effective payload only contains contact + addresses.
       const payload: CreateCustomerPayload = {
         ...submissionData,
-        gst: submissionData.gst || undefined,
-        pan: submissionData.pan || undefined,
+        gst: restrictIdentityFields ? (customer?.gst ?? undefined) : (submissionData.gst || undefined),
+        pan: restrictIdentityFields ? (customer?.pan ?? undefined) : (submissionData.pan || undefined),
+        name: restrictIdentityFields ? (customer?.name ?? submissionData.name) : submissionData.name,
         billingAddress: submissionData.billingAddress || undefined,
       };
 
@@ -273,52 +287,52 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
             <Input
               id="name"
               value={formData.name}
-              onChange={readOnly ? undefined : handleChange}
+              onChange={identityLocked ? undefined : handleChange}
               placeholder="e.g. Tata Motors Ltd"
-              readOnly={readOnly}
+              readOnly={identityLocked}
               className={cn(
-                readOnly ? S.roInput : S.input,
-                !readOnly && errors.name && 'border-red-500 bg-red-50/10',
+                identityLocked ? S.roInput : S.input,
+                !identityLocked && errors.name && 'border-red-500 bg-red-50/10',
               )}
             />
-            {!readOnly && <InlineError path="name" />}
+            {!identityLocked && <InlineError path="name" />}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className={S.inputWrapper}>
               <Label htmlFor="gst" className={S.label}>
-                GST Number{!readOnly && ' (Optional)'}
+                GST Number{!identityLocked && ' (Optional)'}
               </Label>
               <Input
                 id="gst"
-                value={formData.gst || (readOnly ? '—' : '')}
-                onChange={readOnly ? undefined : handleChange}
+                value={formData.gst || (identityLocked ? '—' : '')}
+                onChange={identityLocked ? undefined : handleChange}
                 placeholder="27AAACT..."
-                readOnly={readOnly}
+                readOnly={identityLocked}
                 className={cn(
-                  readOnly ? cn(S.roInput, 'font-mono uppercase') : cn(S.input, 'font-mono uppercase'),
-                  !readOnly && errors.gst && 'border-red-500 bg-red-50/10',
+                  identityLocked ? cn(S.roInput, 'font-mono uppercase') : cn(S.input, 'font-mono uppercase'),
+                  !identityLocked && errors.gst && 'border-red-500 bg-red-50/10',
                 )}
               />
-              {!readOnly && <InlineError path="gst" />}
+              {!identityLocked && <InlineError path="gst" />}
             </div>
 
             <div className={S.inputWrapper}>
               <Label htmlFor="pan" className={S.label}>
-                PAN Card{!readOnly && ' (Optional)'}
+                PAN Card{!identityLocked && ' (Optional)'}
               </Label>
               <Input
                 id="pan"
-                value={formData.pan || (readOnly ? '—' : '')}
-                onChange={readOnly ? undefined : handleChange}
+                value={formData.pan || (identityLocked ? '—' : '')}
+                onChange={identityLocked ? undefined : handleChange}
                 placeholder="AAACT..."
-                readOnly={readOnly}
+                readOnly={identityLocked}
                 className={cn(
-                  readOnly ? cn(S.roInput, 'font-mono uppercase') : cn(S.input, 'font-mono uppercase'),
-                  !readOnly && errors.pan && 'border-red-500 bg-red-50/10',
+                  identityLocked ? cn(S.roInput, 'font-mono uppercase') : cn(S.input, 'font-mono uppercase'),
+                  !identityLocked && errors.pan && 'border-red-500 bg-red-50/10',
                 )}
               />
-              {!readOnly && <InlineError path="pan" />}
+              {!identityLocked && <InlineError path="pan" />}
             </div>
           </div>
         </div>

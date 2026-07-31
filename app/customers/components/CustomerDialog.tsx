@@ -36,6 +36,13 @@ interface CustomerDialogProps {
   mode: DialogMode;
   customer?: CustomerSummary | null;
   initialCustomerValues?: CustomerDefaultValues | null;
+  /**
+   * Lock identity fields (name, GST, PAN) even in edit/create modes. The
+   * form remains editable for phones, billing, and shipping addresses.
+   * Useful when editing from a context where the customer record is shared
+   * (e.g. order details) and identity changes should be made elsewhere.
+   */
+  restrictIdentityFields?: boolean;
   onClose: () => void;
   onSuccess: (customer: CustomerSummary) => void;
   /** Signals page to switch dialogState.mode → 'edit' */
@@ -71,6 +78,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   mode,
   customer,
   initialCustomerValues,
+  restrictIdentityFields = false,
   onClose,
   onSuccess,
   onEdit,
@@ -112,6 +120,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             customer={customer}
             initialCustomerValues={initialCustomerValues}
             readOnly={mode === 'view'}
+            restrictIdentityFields={restrictIdentityFields}
             onSuccess={onSuccess}
             onCancel={onClose}
           />
