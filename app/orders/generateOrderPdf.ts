@@ -30,7 +30,7 @@ function escHtml(str: string | undefined | null): string {
 function formatPaymentStatus(val: string | undefined): string {
   if (val === 'new-paid') return 'New Customer – Paid';
   if (val === 'new-unpaid') return 'New Customer – Unpaid';
-  if (val === 'regular') return 'Regular';
+  if (val === 'credit-note') return 'Credit Note';
   return val || 'N/A';
 }
 

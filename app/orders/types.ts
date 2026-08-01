@@ -26,7 +26,19 @@ export interface UserProfile {
   accessToken: string;
 }
 
-export type CustomerPaymentStatus = 'regular' | 'new-paid' | 'new-unpaid';
+// Customer Payment Status
+export enum CustomerPaymentStatus {
+  CREDIT_NOTE = 'credit-note',
+  NEW_PAID = 'new-paid',
+  NEW_UNPAID = 'new-unpaid',
+}
+export type CustomerPaymentStatusType = CustomerPaymentStatus;
+export const CUSTOMER_PAYMENT_STATUS_LABELS: Record<CustomerPaymentStatus, string> = {
+  [CustomerPaymentStatus.CREDIT_NOTE]: 'Credit Note',
+  [CustomerPaymentStatus.NEW_PAID]: 'New - Paid',
+  [CustomerPaymentStatus.NEW_UNPAID]: 'New - Unpaid',
+};
+export const PAYMENT_STATUS_LABELS: Record<CustomerPaymentStatus, string> = CUSTOMER_PAYMENT_STATUS_LABELS;
 export type MeasurementKata = 'prince' | 'factory';
 export const MEASUREMENT_KATA_LABELS: Record<MeasurementKata, string> = {
   prince: 'Prince Kata',

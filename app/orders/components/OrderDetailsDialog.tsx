@@ -13,7 +13,7 @@ import {
   Loader2, Zap, Save, FileDown, Settings2, Trash2,
 } from 'lucide-react';
 
-import { Order, EditHistoryEntry, DialogMessageType } from '../types';
+import { Order, CustomerPaymentStatus, EditHistoryEntry, DialogMessageType } from '../types';
 import { ordersApi } from '@/lib/api/endpoints/ordersApi';
 const apiService = ordersApi;
 import {
@@ -882,7 +882,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     };
 
     try {
-      await apiService.updateOrder(currentOrder.deoNo, { customerPaymentStatus: 'new-paid' }, historyEntry);
+      await apiService.updateOrder(currentOrder.deoNo, { customerPaymentStatus: CustomerPaymentStatus.NEW_PAID }, historyEntry);
       onOrderUpdated();
       onClose();
       onShowMessage({ type: 'success', text: 'Order marked as Paid!' });

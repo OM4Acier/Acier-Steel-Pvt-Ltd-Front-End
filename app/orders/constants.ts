@@ -48,13 +48,13 @@ export type OrderGroupKey = (typeof ORDER_GROUPS)[number]['key'];
 
 
 export const PAYMENT_STATUS_COLORS: Record<string, string> = {
-  'regular': 'bg-green-200 text-green-800 dark:bg-sky-600 dark:text-white',
+  'credit-note': 'bg-green-200 text-green-800 dark:bg-sky-600 dark:text-white',
   'new-paid': 'bg-emerald-200 text-emerald-800 dark:bg-emerald-600 dark:text-white',
   'new-unpaid': 'bg-red-200 text-red-800 dark:bg-red-600 dark:text-white',
 };
 
 export const PAYMENT_STATUS_GRADIENTS: Record<string, string> = {
-  'regular': 'bg-gradient-to-br from-blue-100 via-blue-50 to-blue-100 dark:from-blue-950 dark:via-gray-800 dark:to-blue-950',
+  'credit-note': 'bg-gradient-to-br from-blue-100 via-blue-50 to-blue-100 dark:from-blue-950 dark:via-gray-800 dark:to-blue-950',
   'new-paid': 'bg-gradient-to-br from-emerald-100 via-emerald-50 to-emerald-100 dark:from-emerald-950 dark:via-gray-800 dark:to-emerald-950',
   'new-unpaid': 'bg-gradient-to-br from-red-100 via-red-50 to-red-100 dark:from-red-950 dark:via-gray-800 dark:to-red-950',
 };

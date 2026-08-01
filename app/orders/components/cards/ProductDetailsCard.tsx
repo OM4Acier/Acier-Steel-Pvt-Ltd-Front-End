@@ -11,16 +11,16 @@ import { canEditSalesSpecificFields } from '../../permissions';
 import AudioManager from '@/components/AudioManager';
 import { RichTextarea } from '@/components/RichTextarea';
 import { ProductDetailsCardProps } from './cardTypes';
-import { TRANSPORT_PROVIDER_LABELS, MEASUREMENT_KATA_LABELS } from '../../types';
+import { TRANSPORT_PROVIDER_LABELS, MEASUREMENT_KATA_LABELS, CustomerPaymentStatus } from '../../types';
 
 // Stable empty-array reference so AudioManager's memoized `pendingFiles` prop
 // identity doesn't change on every render while the card isn't in edit mode.
 const EMPTY_AUDIO_FILES: File[] = [];
 
 const PAYMENT_LABELS: Record<string, string> = {
-  regular: 'Regular Account',
-  'new-paid': 'New - Prepaid',
-  'new-unpaid': 'New - Unpaid',
+  [CustomerPaymentStatus.CREDIT_NOTE]: 'Credit Note',
+  [CustomerPaymentStatus.NEW_PAID]: 'New - Paid',
+  [CustomerPaymentStatus.NEW_UNPAID]: 'New - Unpaid',
 };
 
 const ProductDetailsCard: React.FC<ProductDetailsCardProps> = ({
@@ -67,18 +67,30 @@ const ProductDetailsCard: React.FC<ProductDetailsCardProps> = ({
             placeholder="Enter product details..."
           />
         ) : (
-          <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap p-2 border rounded-md min-h-[120px]">
-            <div
-              className="prose prose-xs dark:prose-invert max-w-none text-gray-800 dark:text-gray-200"
-              dangerouslySetInnerHTML={{ __html: renderMarkdownText(products || 'N/A') }}
-            />
-            {/* Auto-appended plain-text live values (view mode only; NOT sent to server) */}
-            {(transportLabel || kataLabel || paymentLabel) && (
-              <pre className="mt-3 pt-2 border-t border-gray-300 dark:border-gray-600 whitespace-pre-wrap font-mono text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-{`*Transit Provider*: ${transportLabel}\n*Kata*: ${kataLabel}\n*Payment*: ${paymentLabel}`}
-              </pre>
-            )}
-          </div>
+          (() => {
+            // Color derived from payment status for color-coded footer
+            const paymentColorClass =
+              customerPaymentStatus === 'new-unpaid'
+                ? 'text-red-600 dark:text-red-400'
+                : customerPaymentStatus === 'new-paid'
+                  ? 'text-emerald-700 dark:text-emerald-300'
+                  : 'text-blue-700 dark:text-blue-300';
+            // Append the 3 live footer lines as markdown so richtext renderer
+            // styles them inline. (View mode only — never sent to server.)
+            const footer =
+              (transportLabel && `*Transit Provider*: ${transportLabel}`) ||
+              (kataLabel && `*Kata*: ${kataLabel}`) ||
+              (paymentLabel && `*Payment*: ${paymentLabel}`)
+                ? `\n\n*Transit Provider*: ${transportLabel}\n*Kata*: ${kataLabel}\n*Payment*: ${paymentLabel}`
+                : '';
+            const combined = products ? `${products}\n${footer}` : `N/A\n${footer}`;
+            return (
+              <div
+                className={`text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap p-2 border rounded-md min-h-[120px] markdown-body ${paymentColorClass}`}
+                dangerouslySetInnerHTML={{ __html: renderMarkdownText(combined) }}
+              />
+            );
+          })()
         )}
       </div>
 

@@ -81,7 +81,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     client: '',
     contactNo: '',
     organizationContact: '',
-    customerPaymentStatus: 'regular',
+    customerPaymentStatus: CustomerPaymentStatus.CREDIT_NOTE,
     products: '',
     isHighPriority: false,
     partDelivery: false,
@@ -579,9 +579,9 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     const kata = details?.measurementKata;
     const kataLine = kata ? `*Kata*: ${MEASUREMENT_KATA_LABELS[kata]}` : '';
     const paymentLabels: Record<string, string> = {
-      regular: 'Regular Account',
-      'new-paid': 'New - Prepaid',
-      'new-unpaid': 'New - Unpaid',
+      [CustomerPaymentStatus.CREDIT_NOTE]: 'Credit Note',
+      [CustomerPaymentStatus.NEW_PAID]: 'New - Prepaid',
+      [CustomerPaymentStatus.NEW_UNPAID]: 'New - Unpaid',
     };
     const payment = orderData.customerPaymentStatus;
     const paymentLine = payment ? `*Payment*: ${paymentLabels[payment] || payment}` : '';
@@ -1163,8 +1163,8 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent className="z-[10001] rounded-2xl p-2 shadow-2xl border-gray-100">
-                      <SelectItem value="regular" className="rounded-xl font-bold py-2.5">
-                        Regular Account
+                      <SelectItem value="credit-note" className="rounded-xl font-bold py-2.5">
+                        Credit Note
                       </SelectItem>
                       <SelectItem
                         value="new-paid"

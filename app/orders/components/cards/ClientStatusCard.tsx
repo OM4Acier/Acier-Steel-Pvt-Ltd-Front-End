@@ -98,15 +98,17 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
             <Label className="font-medium flex items-center gap-1 text-sm">
               <UserIcon className="w-4 h-4 text-gray-500" /> Org. Contact:
             </Label>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onEditCustomer}
-              className="h-6 px-2 rounded-md text-[10px] font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-            >
-              <Edit2 className="w-3 h-3 mr-0.5" /> Edit
-            </Button>
+            {isEditMode && canEditSalesSpecificFields(role) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onEditCustomer}
+                className="h-6 px-2 rounded-md text-[10px] font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+              >
+                <Edit2 className="w-3 h-3 mr-0.5" /> Edit
+              </Button>
+            )}
           </div>
           <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 text-sm">
             {organizationContact || 'N/A'}
@@ -226,20 +228,22 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="z-[9050]">
-                <SelectItem value="regular">Regular</SelectItem>
+                <SelectItem value="credit-note">Credit Note</SelectItem>
                 <SelectItem value="new-paid">New Customer - Paid</SelectItem>
                 <SelectItem value="new-unpaid">New Customer - Unpaid</SelectItem>
               </SelectContent>
             </Select>
           ) : (
             <Badge
-              className={`${PAYMENT_STATUS_COLORS[customerPaymentStatus ?? '']} font-medium p-2 text-xs`}
+              className={`${PAYMENT_STATUS_COLORS[customerPaymentStatus ?? ''] ?? PAYMENT_STATUS_COLORS['credit-note']} font-medium p-2 text-xs`}
             >
               {customerPaymentStatus === 'new-paid'
                 ? 'New - Paid'
                 : customerPaymentStatus === 'new-unpaid'
                   ? 'New - Unpaid'
-                  : 'Regular'}
+                  : customerPaymentStatus === 'credit-note'
+                    ? 'Credit Note'
+                    : 'Credit Note'}
             </Badge>
 
           )}

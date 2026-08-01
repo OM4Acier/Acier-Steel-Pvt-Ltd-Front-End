@@ -1,5 +1,6 @@
 // lib/data.ts
 import { UserProfile, UserRole } from '@/types/rbac.types';
+import { CustomerPaymentStatus } from '@/app/orders/types';
 import axios from 'axios';
 
 // src/api/axios.ts
@@ -99,7 +100,7 @@ export interface Order {
   client: string;
   contactNo: string;
   organizationContact: string;
-  customerPaymentStatus: 'regular' | 'new-paid' | 'new-unpaid';
+  customerPaymentStatus: CustomerPaymentStatus;
   products: string;
   status: string;
   partDelivery: boolean;
