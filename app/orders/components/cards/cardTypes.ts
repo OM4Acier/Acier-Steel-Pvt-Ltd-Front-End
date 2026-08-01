@@ -26,6 +26,13 @@ export interface ClientStatusCardProps {
   onStatusSelectChange: (value: string) => void;
   /** Opens the customer (billing/shipping/contact) edit dialog. */
   onEditCustomer: () => void;
+  // ── Edit-mode customer info sync (shipping address selection) ──
+  /** Resolved customer's shipping addresses (labels), for selection in edit mode. */
+  shippingAddresses?: string[];
+  /** Currently-selected shipping address (label). */
+  selectedShippingAddress?: string;
+  /** Called when the operator picks a shipping address in edit mode. */
+  onShippingAddressChange?: (address: string) => void;
 }
 
 export interface DeliveryVehicleCardProps {
@@ -101,11 +108,6 @@ export interface InvoiceDetailsCardProps {
   onInvoiceAudioRemoved: (index: number) => void;
   onDeleteUploadedFile: (fileId: string, stage: 'invoice') => void;
   onUploadComplete: () => void;
-  // Customer snapshot — shown in view mode for invoice reference (live values,
-  // NOT sent to server; reflects the customer master at invoice time)
-  client?: string;
-  contactNo?: string;
-  organizationContact?: string;
 }
 
 export interface OrderActionsFooterProps {

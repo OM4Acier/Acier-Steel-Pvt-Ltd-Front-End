@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import {
   User as UserIcon, Phone, MessageCircle, Calendar, Package, Zap,
-  DollarSign, History, ChevronDown, ChevronUp, Edit2,
+  DollarSign, History, ChevronDown, ChevronUp, Edit2, MapPin,
 } from 'lucide-react';
 import {
   canEditSalesSpecificFields, canEditOperationsSpecificFields, isOperations,
@@ -23,8 +23,14 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
   isEditMode, role, status, customerPaymentStatus, client, contactNo,
   organizationContact, partDelivery, isHighPriority, orderDate,
   isAdditionalInfoOpen, onAdditionalInfoToggle, onTextChange,
-  onPaymentStatusChange, onPartDeliveryChange, onHighPriorityChange, onStatusSelectChange,
+  onStatusSelectChange,
   onEditCustomer,
+  shippingAddresses = [],
+  selectedShippingAddress = 'Ask for client',
+  onShippingAddressChange,
+  onPartDeliveryChange,
+  onHighPriorityChange,
+  onPaymentStatusChange,
 }) => {
   return (
     <div className="bg-white dark:bg-gray-900 p-4 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 space-y-3">
@@ -35,9 +41,22 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Client */}
         <div className="space-y-1">
-          <Label htmlFor="client" className="font-medium flex items-center gap-1 text-sm">
-            <UserIcon className="w-4 h-4 text-gray-500" /> Client:
-          </Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="client" className="font-medium flex items-center gap-1 text-sm">
+              <UserIcon className="w-4 h-4 text-gray-500" /> Client:
+            </Label>
+            {isEditMode && canEditSalesSpecificFields(role) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onEditCustomer}
+                className="h-6 px-2 rounded-md text-[10px] font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+              >
+                <Edit2 className="w-3 h-3 mr-0.5" /> Edit
+              </Button>
+            )}
+          </div>
           {isEditMode && canEditSalesSpecificFields(role) ? (
             <Input id="client" value={client || ''} onChange={onTextChange} className="w-full h-9" />
           ) : (
@@ -46,6 +65,26 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
             </span>
           )}
         </div>
+
+        {/* Shipping Address — directly below Client, shown in edit mode for any role */}
+        {isEditMode && shippingAddresses.length > 0 && (
+          <div className="space-y-1">
+            <Label className="font-medium flex items-center gap-1 text-sm">
+              <MapPin className="w-4 h-4 text-gray-500" /> Shipping Address:
+            </Label>
+            <Select value={selectedShippingAddress} onValueChange={(v) => onShippingAddressChange?.(v)}>
+              <SelectTrigger className="w-full h-9">
+                <SelectValue placeholder="Select shipping address" />
+              </SelectTrigger>
+              <SelectContent className="z-[9050]">
+                <SelectItem value="Ask for client">Ask for client</SelectItem>
+                {shippingAddresses.map((addr, i) => (
+                  <SelectItem key={i} value={addr}>{addr}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Contact */}
         <div className="space-y-1">
@@ -94,22 +133,9 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
 
         {/* Org Contact */}
         <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <Label className="font-medium flex items-center gap-1 text-sm">
-              <UserIcon className="w-4 h-4 text-gray-500" /> Org. Contact:
-            </Label>
-            {isEditMode && canEditSalesSpecificFields(role) && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onEditCustomer}
-                className="h-6 px-2 rounded-md text-[10px] font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-              >
-                <Edit2 className="w-3 h-3 mr-0.5" /> Edit
-              </Button>
-            )}
-          </div>
+          <Label className="font-medium flex items-center gap-1 text-sm">
+            <UserIcon className="w-4 h-4 text-gray-500" /> Org. Contact:
+          </Label>
           <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 text-sm">
             {organizationContact || 'N/A'}
           </span>

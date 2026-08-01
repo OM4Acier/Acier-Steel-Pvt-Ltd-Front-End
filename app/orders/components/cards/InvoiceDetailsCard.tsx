@@ -31,7 +31,6 @@ const InvoiceDetailsCard: React.FC<InvoiceDetailsCardProps> = ({
   onInvoiceFileAdd, onInvoiceFileRemove,
   onInvoiceAudioStaged, onInvoiceAudioRemoved,
   onDeleteUploadedFile, onUploadComplete,
-  client, contactNo, organizationContact,
 }) => {
   const pendingAudioFiles = isEditMode ? pendingInvoiceAudioFiles : EMPTY_AUDIO_FILES;
 
@@ -60,30 +59,6 @@ const InvoiceDetailsCard: React.FC<InvoiceDetailsCardProps> = ({
           />
         )}
       </div>
-
-      {/* Customer snapshot (view mode only — live, NOT sent to server) */}
-      {!isEditMode && (client || contactNo || organizationContact) && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="space-y-1">
-            <Label className="font-medium text-xs text-gray-500">Client:</Label>
-            <span className="text-sm text-gray-800 dark:text-gray-200 block border p-1.5 rounded-md bg-gray-50 dark:bg-gray-800">
-              {client || 'N/A'}
-            </span>
-          </div>
-          <div className="space-y-1">
-            <Label className="font-medium text-xs text-gray-500">Contact:</Label>
-            <span className="text-sm text-gray-800 dark:text-gray-200 block border p-1.5 rounded-md bg-gray-50 dark:bg-gray-800">
-              {contactNo || 'N/A'}
-            </span>
-          </div>
-          <div className="space-y-1">
-            <Label className="font-medium text-xs text-gray-500">Org. Contact:</Label>
-            <span className="text-sm text-gray-800 dark:text-gray-200 block border p-1.5 rounded-md bg-gray-50 dark:bg-gray-800">
-              {organizationContact || 'N/A'}
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* Invoice No. + Invoice Issue Date — side by side on desktop, stacked on mobile */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t dark:border-gray-700">

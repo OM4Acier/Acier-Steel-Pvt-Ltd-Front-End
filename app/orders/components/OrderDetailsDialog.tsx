@@ -26,7 +26,11 @@ import {
   canExportPdf, canConfigurePdf,
 } from '../permissions';
 import { canTransitionToGeneral } from '../constants';
-
+import {
+  buildCustomerInfoBlock,
+  replaceCustomerInfoBlock,
+  replaceCustomerField,
+} from '../customerInfoBlock';
 import { processFilesToPdf, pdfBytesToFile, formatFileSize } from '@/lib/utils/pdfMergeUtils';
 import { fileApi } from '@/lib/api/endpoints/fileApi';
 import ClientStatusCard from './cards/ClientStatusCard';
@@ -156,6 +160,30 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       setCurrentOrder(normalizedOrder);
       setIsEditMode(false);
       resetPendingChanges();
+      // Pre-load the customer's shipping addresses so the edit-mode shipping
+      // selector is available immediately (no need to open the customer dialog
+      // first). Resolved by client name, matching resolveCustomer() below.
+      void (async () => {
+        if (!normalizedOrder.client) return;
+        try {
+          const clients = await customersApi.fetchCustomers();
+          const match = clients.find((c) => c && c.name === normalizedOrder.client) || null;
+          if (match) {
+            const addresses = await customersApi.fetchCustomerAddresses(match.id);
+            setShippingAddressOptions(
+              (addresses.shippingAddresses || []).map((s) => s.label).filter(Boolean),
+            );
+            const current = normalizedOrder.details?.siteDeliveryInfo;
+            const hasMatch = (addresses.shippingAddresses || []).some((s) => s.address === current);
+            const lbl = hasMatch
+              ? (addresses.shippingAddresses || []).find((s) => s.address === current)?.label
+              : 'Ask for client';
+            setSelectedShippingAddress(lbl || 'Ask for client');
+          }
+        } catch (err) {
+          console.error('Failed to pre-load shipping addresses', err);
+        }
+      })();
     }
   }, [order, isOpen]);
 
@@ -179,6 +207,9 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
   const [resolvedCustomer, setResolvedCustomer] = useState<CustomerSummary | null>(null);
   const [isResolvingCustomer, setIsResolvingCustomer] = useState(false);
+  // Edit-mode shipping-address selection (mirrors CreateOrderDialog)
+  const [shippingAddressOptions, setShippingAddressOptions] = useState<string[]>([]);
+  const [selectedShippingAddress, setSelectedShippingAddress] = useState('Ask for client');
 
   const handleEditCustomer = () => {
     if (resolvedCustomer) {
@@ -188,21 +219,95 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     }
   };
 
+  // After a customer is resolved/edited, sync its identity + billing/shipping
+  // info into the order's invoiceDetails field (the same block CreateOrderDialog
+  // auto-injects at order creation) so the PDF stays in sync. Only runs in edit
+  // mode and only when the operator explicitly saves — never silently.
+  const syncCustomerInfoIntoInvoice = React.useCallback(async (customer: CustomerSummary) => {
+    if (!isEditMode) return;
+    // Pull latest addresses from server
+    let billingAddress = '';
+    let shippingAddresses: string[] = [];
+    try {
+      const addresses = await customersApi.fetchCustomerAddresses(customer.id);
+      billingAddress = addresses.billingAddress ?? '';
+      shippingAddresses = (addresses.shippingAddresses || []).map((s) => s.address).filter(Boolean);
+    } catch (err) {
+      console.error('Failed to fetch addresses for invoice sync', err);
+    }
+
+    const block = buildCustomerInfoBlock({
+      client: customer.name,
+      gst: customer.gst || '',
+      billing: billingAddress,
+      shipping: shippingAddresses.length
+        ? shippingAddresses.join(' | ')
+        : 'Ask for client',
+    });
+
+    const current = currentOrder?.details?.invoiceDetails || '';
+    // Locate the fenced customer-info block (client-info-start / client-info-end)
+    // and replace it. All other text in the invoice field is preserved. If no
+    // fenced block exists yet, it is inserted.
+    const next = replaceCustomerInfoBlock(current, block);
+    handleTextChange({ target: { id: 'invoiceDetails', value: next } } as any);
+  }, [isEditMode, currentOrder]);
+
   const resolveCustomer = React.useCallback(async () => {
     if (!currentOrder?.client) return;
     setIsResolvingCustomer(true);
     try {
       const clients = await customersApi.fetchCustomers();
       // Match by name. The client field on the order is the customer's name.
-      const match = clients.find((c) => c.name === currentOrder.client) || null;
+      // Filter out any null/undefined entries returned by the API first.
+      const match = clients.find(
+        (c) => c && c.name === currentOrder.client,
+      ) || null;
       setResolvedCustomer(match);
+      // Load shipping addresses so the edit-mode selector is populated
+      if (match) {
+        try {
+          const addresses = await customersApi.fetchCustomerAddresses(match.id);
+          setShippingAddressOptions(
+            (addresses.shippingAddresses || []).map((s) => s.label).filter(Boolean),
+          );
+          // Default selection: keep "Ask for client" if no siteDeliveryInfo; else
+          // try to match the order's current siteDeliveryInfo to a label.
+          const current = currentOrder.details?.siteDeliveryInfo;
+          if (current && (addresses.shippingAddresses || []).some((s) => s.address === current)) {
+            const lbl = (addresses.shippingAddresses || []).find((s) => s.address === current)?.label;
+            if (lbl) setSelectedShippingAddress(lbl);
+          } else {
+            setSelectedShippingAddress('Ask for client');
+          }
+        } catch (addrErr) {
+          console.error('Failed to load shipping addresses for selector', addrErr);
+        }
+      }
       setCustomerDialogOpen(true);
     } catch (err) {
       console.error('Failed to resolve customer for edit', err);
     } finally {
       setIsResolvingCustomer(false);
     }
-  }, [currentOrder?.client]);
+  }, [currentOrder?.client, currentOrder?.details?.siteDeliveryInfo]);
+
+  // Edit-mode: operator picks a shipping address from the customer's saved hubs.
+  // Updates the order's siteDeliveryInfo and re-syncs the *Shipping Address* line
+  // inside the fenced customer-info block (so the rest of the invoice field is
+  // preserved). Mirrors CreateOrderDialog.handleShippingAddressChange.
+  const handleShippingAddressChange = React.useCallback((addr: string) => {
+    setSelectedShippingAddress(addr);
+    // Update siteDeliveryInfo (editable detail field)
+    handleTextChange({ target: { id: 'siteDeliveryInfo', value: addr !== 'Ask for client' ? addr : '' } } as any);
+    // Re-sync the *Shipping Address* field inside the fenced customer-info block.
+    // replaceCustomerField updates only the `ci-shipping`...`ci-shipping` region
+    // (or appends it), preserving all other invoice text.
+    const current = currentOrder?.details?.invoiceDetails || '';
+    const shipLine = `*Shipping Address*: ${addr}`;
+    const next = replaceCustomerField(current, 'shipping', shipLine);
+    handleTextChange({ target: { id: 'invoiceDetails', value: next } } as any);
+  }, [currentOrder]);
 
   React.useEffect(() => {
     if (order && isOpen) {
@@ -210,7 +315,13 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     }
   }, [order, isOpen]);
 
-  const handleCustomerSuccess = (updated: CustomerSummary) => {
+  const handleCustomerSuccess = (updated: CustomerSummary | null) => {
+    // Guard: the upstream API/update can resolve to null (e.g. empty data
+    // envelope). Never crash on `updated.name` — bail out cleanly.
+    if (!updated) {
+      setCustomerDialogOpen(false);
+      return;
+    }
     setResolvedCustomer(updated);
     setCustomerDialogOpen(false);
     // Update the live order record directly (NOT via pendingChanges/onTextChange)
@@ -219,13 +330,19 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     // (Only syncs name + primary phone — orgContact is a separate order field
     //  not stored on the customer record, and billing/shipping addresses live
     //  in the CustomerDialog, not on the order.)
-    if (currentOrder) {
-      setCurrentOrder((prev) => ({
-        ...prev!,
-        client: updated.name || prev!.client,
-        contactNo: updated.phones?.[0] || prev!.contactNo,
-      }));
-    }
+    // Guard against a null `prev` (dialog may have reset currentOrder) — no `!`.
+    setCurrentOrder((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        client: updated.name || prev.client,
+        contactNo: updated.phones?.[0] || prev.contactNo,
+      };
+    });
+    // In edit mode, also push the customer's identity + billing/shipping block
+    // into invoiceDetails (mirrors CreateOrderDialog auto-injection) so the PDF
+    // stays in sync. No-op in view mode (field is read-only there).
+    void syncCustomerInfoIntoInvoice(updated);
     onOrderUpdated();
   };
   // Compute display order (merge current + pending)
@@ -496,7 +613,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
         'invoiceNo',
         'invoiceIssueDate',
         'siteDeliveryInfo',
-        'weightScaleType',
+        'measurementKata',
         'transportProvider',
         'transportProviderName'
       ];
@@ -685,7 +802,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   const onWeightScaleChange = useCallback(
     (value: string) => setPendingChanges(prev => ({
       ...prev,
-      textFields: { ...prev.textFields, details: { ...prev.textFields.details, weightScaleType: value as any } },
+      textFields: { ...prev.textFields, details: { ...prev.textFields.details, measurementKata: value as any } },
       hasChanges: true,
     })),
     []
@@ -1029,8 +1146,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
         }
       }}>
         <DialogContent
-          className={`sm:max-w-[800px] md:max-w-[1400px] p-2 md:p-4 rounded-xl shadow-2xl overflow-y-auto max-h-[80vh] md:max-h-[90vh] z-[9000] dialog-custom-scrollbar ${dialogBackgroundClass}'
-          }`}
+          className={`sm:max-w-[800px] md:max-w-[1400px] p-2 md:p-4 rounded-xl shadow-2xl overflow-y-auto max-h-[80vh] md:max-h-[90vh] z-[9000] dialog-custom-scrollbar ${dialogBackgroundClass}`}
         >
 
           {/* 3. Flashing "PAYMENT NOT COMPLETED" Warning */}
@@ -1117,6 +1233,9 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                 onHighPriorityChange={onHighPriorityChange}
                 onStatusSelectChange={onStatusSelectChange}
                 onEditCustomer={handleEditCustomer}
+                shippingAddresses={shippingAddressOptions}
+                selectedShippingAddress={selectedShippingAddress}
+                onShippingAddressChange={handleShippingAddressChange}
               />
 
               {/* Delivery & Vehicle Details Card - CLEAN WHITE REDESIGN */}
@@ -1198,9 +1317,6 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                   onInvoiceAudioRemoved={handleInvoiceAudioRemoved}
                   onDeleteUploadedFile={handleDeleteUploadedFile}
                   onUploadComplete={handleUploadComplete}
-                  client={displayOrder?.client}
-                  contactNo={displayOrder?.contactNo}
-                  organizationContact={displayOrder?.organizationContact}
                 />
               )}
             </div>

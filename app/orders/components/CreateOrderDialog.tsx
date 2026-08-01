@@ -54,6 +54,7 @@ import { RichTextarea } from '@/components/RichTextarea';
 import { CustomerDialog, DialogMode } from '../../customers/components/CustomerDialog';
 
 import { QuotationPrefillPayload } from '../types';
+import { buildCustomerInfoBlock, replaceCustomerField } from '../customerInfoBlock';
 
 interface CreateOrderDialogProps {
   isOpen: boolean;
@@ -379,27 +380,32 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     setInjectedGstText(gstText);
     setInjectedShippingText(initialShippingText);
 
-    // Always insert client block at the START of invoiceDetails
-    setOrderData((prev) => {
-      // Strip out any previously injected client/gst/billing/shipping snippets
-      let rest = prev.details?.invoiceDetails || '';
-      for (const snippet of [injectedClientText, injectedGstText, injectedBillingText, injectedShippingText]) {
-        if (!snippet) continue;
-        rest = rest
-          .replace('\n\n' + snippet, '')
-          .replace(snippet + '\n\n', '')
-          .replace(snippet, '');
-      }
+    // Always insert the client block at the START of invoiceDetails, wrapped in
+    // `client-info-start` / `client-info-end` fences (each field in its own
+    // `ci-*` fence) so it can be reliably located and replaced per-field when
+    // the customer is updated later.
+    setOrderData((p2) => {
+      // Strip any prior fenced customer-info block, then re-insert a fresh one.
+      const withoutBlock = p2.details?.invoiceDetails?.replace(
+        /`client-info-start`[\s\S]*?`client-info-end`/,
+        '',
+      ).replace(/\n{3,}/g, '\n\n').trim() || '';
 
-      const clientBlock = [clientText, gstText, initialShippingText].filter(Boolean).join('\n\n');
-      // Prepend: client block at top, then whatever was already there
-      const newDetails = rest.trim() ? `${clientBlock}\n\n${rest.trim()}` : clientBlock;
+      const clientBlock = buildCustomerInfoBlock({
+        client: client.name,
+        gst: client.gst || '',
+        billing: '', // billing address is filled in after addresses load
+        shipping: 'Ask for client',
+      });
+      const newDetails = withoutBlock
+        ? `${clientBlock}\n\n${withoutBlock}`
+        : clientBlock;
 
       return {
-        ...prev,
+        ...p2,
         client: client.name,
         contactNo: client.phones?.[0] || '',
-        details: { ...prev.details!, invoiceDetails: newDetails },
+        details: { ...p2.details!, invoiceDetails: newDetails },
       };
     });
 
@@ -416,17 +422,12 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
           const billingText = `*Billing Address*: ${addresses.billingAddress}`;
           setInjectedBillingText(billingText);
 
-          // Insert billing address right after GST (or clientText) — still at the top block
+          // Insert billing address into the fenced customer-info block's
+          // `ci-billing` field (per-field replace, preserves everything else).
           setOrderData((prev) => {
-            let currentDetails = prev.details?.invoiceDetails || '';
-            const insertionPoint = gstText || clientText;
-            if (currentDetails.includes(insertionPoint)) {
-              currentDetails = currentDetails.replace(insertionPoint, `${insertionPoint}\n\n${billingText}`);
-            } else {
-              // Fallback: prepend billing at very top
-              currentDetails = currentDetails ? `${billingText}\n\n${currentDetails}` : billingText;
-            }
-            return { ...prev, details: { ...prev.details!, invoiceDetails: currentDetails } };
+            const currentDetails = prev.details?.invoiceDetails || '';
+            const next = replaceCustomerField(currentDetails, 'billing', billingText);
+            return { ...prev, details: { ...prev.details!, invoiceDetails: next } };
           });
         }
       } catch (error: unknown) {
@@ -810,8 +811,22 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
 
     setIsAddingOrder(true);
     try {
+      const salesName =
+        selectedSalesExec?.name || currentUserProfile.name || currentUserProfile.email || 'Unknown';
+      const salesLine = `sales - ${salesName}`;
+      // Append the sales attribution line to the END of invoiceDetails — only at
+      // order creation (the edit dialog must never re-insert this). If the line
+      // is already present (e.g. operator typed it), don't duplicate.
+      const baseInvoice = orderData.details?.invoiceDetails || '';
+      const salesLineAlready =
+        baseInvoice.trim().split('\n').map((l) => l.trim()).includes(salesLine);
+      const finalInvoice = salesLineAlready
+        ? baseInvoice
+        : (baseInvoice.trim() ? `${baseInvoice.trim()}\n\n${salesLine}` : salesLine);
+
       const orderToCreate = {
         ...orderData,
+        details: { ...orderData.details, invoiceDetails: finalInvoice },
         organizationContact: currentUserProfile.email,
         organizationContactDetails: selectedSalesExec || {
           userId: currentUserProfile.id,

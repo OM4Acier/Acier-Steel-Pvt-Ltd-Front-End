@@ -62,8 +62,12 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
   onCancel,
   className,
 }) => {
-  // Effective lock state — identity fields are locked if either flag says so.
+  // Effective lock state:
+  // - readOnly (view) locks everything
+  // - restrictIdentityFields (order-side edit) locks ONLY identity (name/GST/PAN)
+  //   so the operator can still edit contact (phones) + billing/shipping addresses
   const identityLocked = readOnly || restrictIdentityFields;
+  const phonesLocked = readOnly; // phones stay editable when only identity is restricted
   const [isLoading, setIsLoading] = useState(false);
   const [isAddressLoading, setIsAddressLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -254,10 +258,30 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
 
       let result: CustomerSummary;
       if (customer) {
-        result = await customersApi.updateCustomer(customer.id, payload);
+        const updated = await customersApi.updateCustomer(customer.id, payload);
+        // The backend returns `{ success: true, data: null, message: ... }` on
+        // update, so `updated` can be null. Reuse the known customer record
+        // (name/phones are already current) so the order UI still syncs.
+        result = updated ?? customer;
+        // Refresh addresses from the server so the form reflects latest state
+        // (requirement: after update, GET /:id/addresses for fresh addresses).
+        try {
+          const addresses = await customersApi.fetchCustomerAddresses(customer.id);
+          setFormData((prev) => ({
+            ...prev,
+            billingAddress: addresses.billingAddress ?? '',
+            shippingAddresses: addresses.shippingAddresses.map((sa) => ({
+              label: sa.label,
+              address: sa.address,
+            })),
+          }));
+        } catch (addrErr) {
+          console.error('Failed to refresh addresses after update', addrErr);
+        }
         toast.success('Profile updated successfully');
       } else {
         result = await customersApi.createCustomer(payload);
+        if (!result) throw new Error('Server returned no customer record after creation.');
         toast.success('Customer profile created');
       }
 
@@ -344,7 +368,7 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
           <h3 className={S.sectionLabel}>
             <Phone className="w-5 h-5 text-[#0066cc]" /> Communication
           </h3>
-          {!readOnly && (
+          {!phonesLocked && (
             <Button
               type="button"
               variant="ghost"
@@ -363,16 +387,16 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
                 <Input
                   id={`phones_${idx}`}
                   value={phone}
-                  onChange={readOnly ? undefined : (e) => handleContactChange(idx, e.target.value)}
+                  onChange={phonesLocked ? undefined : (e) => handleContactChange(idx, e.target.value)}
                   placeholder="Phone number"
-                  readOnly={readOnly}
+                  readOnly={phonesLocked}
                   className={cn(
                     'flex-1',
-                    readOnly ? S.roInput : S.input,
-                    !readOnly && errors[`phones_${idx}`] && 'border-red-500 bg-red-50/10',
+                    phonesLocked ? S.roInput : S.input,
+                    !phonesLocked && errors[`phones_${idx}`] && 'border-red-500 bg-red-50/10',
                   )}
                 />
-                {!readOnly && formData.phones.length > 1 && (
+                {!phonesLocked && formData.phones.length > 1 && (
                   <Button
                     type="button"
                     variant="ghost"
@@ -384,7 +408,7 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
                   </Button>
                 )}
               </div>
-              {!readOnly && <InlineError path={`phones_${idx}`} />}
+              {!phonesLocked && <InlineError path={`phones_${idx}`} />}
             </div>
           ))}
         </div>
