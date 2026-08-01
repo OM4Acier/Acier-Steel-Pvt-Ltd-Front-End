@@ -101,6 +101,11 @@ export interface InvoiceDetailsCardProps {
   onInvoiceAudioRemoved: (index: number) => void;
   onDeleteUploadedFile: (fileId: string, stage: 'invoice') => void;
   onUploadComplete: () => void;
+  // Customer snapshot — shown in view mode for invoice reference (live values,
+  // NOT sent to server; reflects the customer master at invoice time)
+  client?: string;
+  contactNo?: string;
+  organizationContact?: string;
 }
 
 export interface OrderActionsFooterProps {

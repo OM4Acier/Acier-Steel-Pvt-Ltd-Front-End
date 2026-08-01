@@ -213,9 +213,21 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   const handleCustomerSuccess = (updated: CustomerSummary) => {
     setResolvedCustomer(updated);
     setCustomerDialogOpen(false);
+    // Update the live order record directly (NOT via pendingChanges/onTextChange)
+    // so the form stays clean with zero "pending" flags while the displayed
+    // client / contact values reflect the customer update.
+    // (Only syncs name + primary phone — orgContact is a separate order field
+    //  not stored on the customer record, and billing/shipping addresses live
+    //  in the CustomerDialog, not on the order.)
+    if (currentOrder) {
+      setCurrentOrder((prev) => ({
+        ...prev!,
+        client: updated.name || prev!.client,
+        contactNo: updated.phones?.[0] || prev!.contactNo,
+      }));
+    }
     onOrderUpdated();
   };
-
   // Compute display order (merge current + pending)
   const displayOrder = React.useMemo(() => {
     if (!currentOrder) return null;
@@ -1186,6 +1198,9 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                   onInvoiceAudioRemoved={handleInvoiceAudioRemoved}
                   onDeleteUploadedFile={handleDeleteUploadedFile}
                   onUploadComplete={handleUploadComplete}
+                  client={displayOrder?.client}
+                  contactNo={displayOrder?.contactNo}
+                  organizationContact={displayOrder?.organizationContact}
                 />
               )}
             </div>
