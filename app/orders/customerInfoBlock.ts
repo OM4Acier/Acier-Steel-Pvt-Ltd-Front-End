@@ -46,19 +46,23 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Replace (or insert) the whole fenced customer-info block inside a larger text.
- * Only the region between the HTML comment fences is swapped — everything else
- * is preserved untouched. If no block exists, it is prepended.
- */
-export const replaceCustomerInfoBlock = (text: string, block: string): string => {
-  // Greedy match: from the first start fence to the last end fence. This
-  // collapses any duplicate blocks into a single replacement.
-  const re = new RegExp(
-    `${escapeRe(CUSTOMER_INFO_START)}[\\s\\S]*${escapeRe(CUSTOMER_INFO_END)}`,
-  );
-  if (re.test(text)) return text.replace(re, block);
-  const trimmed = text.trim();
-  return trimmed ? `${block}\n\n${trimmed}` : block;
-};
+ /**
+  * Replace (or insert) the whole fenced customer-info block inside a larger text.
+  * Any existing blocks between the HTML comment fences are stripped first, so
+  * this call always leaves exactly one block — no duplicates. All other text
+  * outside the fences is preserved untouched.
+  */
+ export const replaceCustomerInfoBlock = (text: string, block: string): string => {
+   // Strip ALL existing blocks (handles duplicates / empty blocks).
+   const re = new RegExp(
+     `${escapeRe(CUSTOMER_INFO_START)}[\\s\\S]*?${escapeRe(CUSTOMER_INFO_END)}`,
+     'g',
+   );
+   const withoutBlocks = text.replace(re, '').replace(/\n{3,}/g, '\n\n').trim();
+   // If there's any existing content, prepend the block. Otherwise the block
+   // is the entire content.
+   return withoutBlocks ? `${block}\n\n${withoutBlocks}` : block;
+ };
 
 /**
  * Replace (or insert) a single customer field inside the fenced block.

@@ -54,7 +54,7 @@ import { RichTextarea } from '@/components/RichTextarea';
 import { CustomerDialog, DialogMode } from '../../customers/components/CustomerDialog';
 
 import { QuotationPrefillPayload } from '../types';
-import { buildCustomerInfoBlock, replaceCustomerField } from '../customerInfoBlock';
+import { buildCustomerInfoBlock, replaceCustomerField, CUSTOMER_INFO_START, CUSTOMER_INFO_END } from '../customerInfoBlock';
 
 interface CreateOrderDialogProps {
   isOpen: boolean;
@@ -381,13 +381,14 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     setInjectedShippingText(initialShippingText);
 
     // Always insert the client block at the START of invoiceDetails, wrapped in
-    // `client-info-start` / `client-info-end` fences (each field in its own
-    // `ci-*` fence) so it can be reliably located and replaced per-field when
-    // the customer is updated later.
+    // HTML comment fences (invisible to users but findable in raw text).
     setOrderData((p2) => {
-      // Strip any prior fenced customer-info block, then re-insert a fresh one.
+      // Strip any prior customer-info block, then re-insert a fresh one.
       const withoutBlock = p2.details?.invoiceDetails?.replace(
-        /`client-info-start`[\s\S]*?`client-info-end`/,
+        new RegExp(
+          `${CUSTOMER_INFO_START.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${CUSTOMER_INFO_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
+          'g',
+        ),
         '',
       ).replace(/\n{3,}/g, '\n\n').trim() || '';
 
