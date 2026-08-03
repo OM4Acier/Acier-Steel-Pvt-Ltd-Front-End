@@ -50,8 +50,10 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * is preserved untouched. If no block exists, it is prepended.
  */
 export const replaceCustomerInfoBlock = (text: string, block: string): string => {
+  // Greedy match: from the first start fence to the last end fence. This
+  // collapses any duplicate blocks into a single replacement.
   const re = new RegExp(
-    `${escapeRe(CUSTOMER_INFO_START)}[\\s\\S]*?${escapeRe(CUSTOMER_INFO_END)}`,
+    `${escapeRe(CUSTOMER_INFO_START)}[\\s\\S]*${escapeRe(CUSTOMER_INFO_END)}`,
   );
   if (re.test(text)) return text.replace(re, block);
   const trimmed = text.trim();
