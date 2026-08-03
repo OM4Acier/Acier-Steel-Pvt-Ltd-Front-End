@@ -301,11 +301,10 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     // Update siteDeliveryInfo (editable detail field)
     handleTextChange({ target: { id: 'siteDeliveryInfo', value: addr !== 'Ask for client' ? addr : '' } } as any);
     // Re-sync the *Shipping Address* field inside the fenced customer-info block.
-    // replaceCustomerField updates only the `ci-shipping`...`ci-shipping` region
-    // (or appends it), preserving all other invoice text.
+    // replaceCustomerField updates only the *Shipping Address* line (or appends
+    // it), preserving all other invoice text.
     const current = currentOrder?.details?.invoiceDetails || '';
-    const shipLine = `*Shipping Address*: ${addr}`;
-    const next = replaceCustomerField(current, 'shipping', shipLine);
+    const next = replaceCustomerField(current, 'shipping', addr);
     handleTextChange({ target: { id: 'invoiceDetails', value: next } } as any);
   }, [currentOrder]);
 

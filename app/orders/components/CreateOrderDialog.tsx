@@ -426,7 +426,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
           // `ci-billing` field (per-field replace, preserves everything else).
           setOrderData((prev) => {
             const currentDetails = prev.details?.invoiceDetails || '';
-            const next = replaceCustomerField(currentDetails, 'billing', billingText);
+            const next = replaceCustomerField(currentDetails, 'billing', addresses.billingAddress ?? '');
             return { ...prev, details: { ...prev.details!, invoiceDetails: next } };
           });
         }
@@ -534,28 +534,15 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     setSelectedShippingAddress(addr);
 
     setOrderData((prev) => {
-      let currentDetails = prev.details?.invoiceDetails || '';
-
-      if (injectedShippingText) {
-        currentDetails = currentDetails
-          .replace('\n\n' + injectedShippingText, '')
-          .replace(injectedShippingText + '\n\n', '')
-          .replace(injectedShippingText, '');
-      }
-
-      const newText = `*Shipping Address*: ${addr}`;
-      currentDetails = currentDetails ? `${currentDetails}\n\n${newText}` : newText;
-      setInjectedShippingText(newText);
-
+      const currentDetails = prev.details?.invoiceDetails || '';
+      const next = replaceCustomerField(currentDetails, 'shipping', addr);
       return {
         ...prev,
-        details: {
-          ...prev.details!,
-          invoiceDetails: currentDetails,
-          siteDeliveryInfo: addr !== 'Ask for client' ? addr : '',
-        },
+        details: { ...prev.details!, invoiceDetails: next },
       };
     });
+
+    setInjectedShippingText(`*Shipping Address*: ${addr}`);
   };
 
   // ─── Auto-insert real-time values into Product Information section ──────────
