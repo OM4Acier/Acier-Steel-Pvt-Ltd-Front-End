@@ -54,7 +54,7 @@ import { RichTextarea } from '@/components/RichTextarea';
 import { CustomerDialog, DialogMode } from '../../customers/components/CustomerDialog';
 
 import { QuotationPrefillPayload } from '../types';
-import { buildCustomerInfoBlock, replaceCustomerField, CUSTOMER_INFO_START, CUSTOMER_INFO_END, replaceCustomerInfoBlock } from '../customerInfoBlock';
+import { buildCustomerInfoBlock, replaceCustomerField, replaceCustomerInfoBlock } from '../customerInfoBlock';
 import { canDo } from '@/lib/auth/access';
 
 interface CreateOrderDialogProps {
@@ -384,30 +384,21 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     // Always insert the client block at the START of invoiceDetails, wrapped in
     // HTML comment fences (invisible to users but findable in raw text).
     setOrderData((p2) => {
-      // Strip any prior customer-info block, then re-insert a fresh one.
-      const withoutBlock = p2.details?.invoiceDetails?.replace(
-        new RegExp(
-          `${CUSTOMER_INFO_START.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${CUSTOMER_INFO_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
-          'g',
-        ),
-        '',
-      ).replace(/\n{3,}/g, '\n\n').trim() || '';
-
-      const clientBlock = buildCustomerInfoBlock({
-        client: client.name,
-        gst: client.gst || '',
-        billing: '', // billing address is filled in after addresses load
-        shipping: 'Ask for client',
-      });
-      const newDetails = withoutBlock
-        ? `${clientBlock}\n\n${withoutBlock}`
-        : clientBlock;
+      const next = replaceCustomerInfoBlock(
+        p2.details?.invoiceDetails || '',
+        buildCustomerInfoBlock({
+          client: client.name,
+          gst: client.gst || '',
+          billing: '', // billing address is filled in after addresses load
+          shipping: 'Ask for client',
+        }),
+      );
 
       return {
         ...p2,
         client: client.name,
         contactNo: client.phones?.[0] || '',
-        details: { ...p2.details!, invoiceDetails: newDetails },
+        details: { ...p2.details!, invoiceDetails: next },
       };
     });
 
