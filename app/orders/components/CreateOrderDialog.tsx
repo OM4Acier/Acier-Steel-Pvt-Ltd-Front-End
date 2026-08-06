@@ -38,7 +38,7 @@ import {
   Users,
   Phone,
 } from 'lucide-react';
-import { CustomerPaymentStatus, DeoNumbersByPrefix, DialogMessageType, Order, MeasurementKata, TRANSPORT_PROVIDER_LABELS, MEASUREMENT_KATA_LABELS } from '../types';
+import { CustomerPaymentStatus, DeoNumbersByPrefix, DialogMessageType, Order, MeasurementKata } from '../types';
 import { ordersApi } from '@/lib/api/endpoints/ordersApi';
 const apiService = ordersApi;
 import { customersApi, CustomerSummary } from '@/lib/api/endpoints/customers';
@@ -545,64 +545,6 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
 
     setInjectedShippingText(`*Shipping Address*: ${addr}`);
   };
-
-  // ─── Auto-insert real-time values into Product Information section ──────────
-  // Transit provider, kata, and payment status are mirrored as 3 real-time
-  // lines appended at the END of the products textarea. The values are read
-  // live from orderData on every change — not snapshotted as a string.
-  // We identify the trailing block by its first line "*Transit Provider*:"
-  // so we always replace exactly those 3 lines (or fewer if a value is empty).
-  const PRODUCTS_FOOTER_MARKER = '*Transit Provider*:';
-
-  const buildProductsFooter = () => {
-    const details = orderData.details;
-    const transport = details?.transportProvider
-      ? TRANSPORT_PROVIDER_LABELS[details.transportProvider] ||
-        (details.transportProvider === 'Porter' ? 'Porter' : String(details.transportProvider))
-      : '';
-    const transportLine = transport
-      ? (details!.transportProvider === 'own' && details!.transportProviderName
-          ? `*Transit Provider*: ${transport} - ${details!.transportProviderName}`
-          : `*Transit Provider*: ${transport}`)
-      : '';
-    const kata = details?.measurementKata;
-    const kataLine = kata ? `*Kata*: ${MEASUREMENT_KATA_LABELS[kata]}` : '';
-    const paymentLabels: Record<string, string> = {
-      [CustomerPaymentStatus.CREDIT_NOTE]: 'Credit Note',
-      [CustomerPaymentStatus.NEW_PAID]: 'New - Prepaid',
-      [CustomerPaymentStatus.NEW_UNPAID]: 'New - Unpaid',
-    };
-    const payment = orderData.customerPaymentStatus;
-    const paymentLine = payment ? `*Payment*: ${paymentLabels[payment] || payment}` : '';
-    return [transportLine, kataLine, paymentLine].filter(Boolean).join('\n');
-  };
-
-  // Strip a previous auto footer (if any) and append a fresh one.
-  // The footer is exactly the 3 data lines, with a leading blank line separator.
-  const applyProductsFooter = (text: string): string => {
-    const markerIdx = text.indexOf(PRODUCTS_FOOTER_MARKER);
-    const before = markerIdx === -1 ? text : text.substring(0, markerIdx);
-    const footer = buildProductsFooter();
-    const trimmedBefore = before.replace(/\s+$/, '');
-    if (!footer) return trimmedBefore;
-    return `${trimmedBefore}\n\n${footer}`;
-  };
-
-  const autoKeys = JSON.stringify({
-    transport: orderData.details?.transportProvider,
-    transportName: orderData.details?.transportProviderName,
-    kata: orderData.details?.measurementKata,
-    payment: orderData.customerPaymentStatus,
-  });
-
-  React.useEffect(() => {
-    setOrderData((prev) => {
-      const currentProducts = prev.products || '';
-      const nextProducts = applyProductsFooter(currentProducts);
-      if (nextProducts === currentProducts) return prev;
-      return { ...prev, products: nextProducts };
-    });
-  }, [autoKeys]);
 
   // ─── Form reset ───────────────────────────────────────────────────────────
 
@@ -1286,9 +1228,6 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                                     placeholder="e.g., **500 sqm** Color Coated Sheets; Price: ₹{{500*120}}/sqm"
                                     className="rounded-[1.5rem] border-gray-100 shadow-sm text-sm font-medium leading-relaxed"
                                   />
-                                  <p className="text-[9px] text-gray-400 italic mt-1">
-                                    Transit Provider, Kata, and Payment Status auto-append to the bottom in real time.
-                                  </p>
                                 </div>
                 <div className="md:col-span-4 space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
