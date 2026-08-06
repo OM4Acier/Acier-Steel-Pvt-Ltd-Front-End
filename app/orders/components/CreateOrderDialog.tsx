@@ -54,7 +54,8 @@ import { RichTextarea } from '@/components/RichTextarea';
 import { CustomerDialog, DialogMode } from '../../customers/components/CustomerDialog';
 
 import { QuotationPrefillPayload } from '../types';
-import { buildCustomerInfoBlock, replaceCustomerField, CUSTOMER_INFO_START, CUSTOMER_INFO_END } from '../customerInfoBlock';
+import { buildCustomerInfoBlock, replaceCustomerField, CUSTOMER_INFO_START, CUSTOMER_INFO_END, replaceCustomerInfoBlock } from '../customerInfoBlock';
+import { canDo } from '@/lib/auth/access';
 
 interface CreateOrderDialogProps {
   isOpen: boolean;
@@ -729,6 +730,10 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
 
   const handleSubmit = async () => {
     if (!currentUserProfile) return;
+    if (!canDo(currentUserProfile, 'orders:create')) {
+      onShowMessage({ type: 'error', text: 'You do not have permission to create orders. Permission required: orders:create' });
+      return;
+    }
     if (createdOrderDeoNo) {
       await handleRetryFileUpload();
       return;
