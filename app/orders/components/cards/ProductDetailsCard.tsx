@@ -2,7 +2,7 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { ChevronDown, ChevronUp, File, Upload } from 'lucide-react';
+import { ChevronDown, ChevronUp, File } from 'lucide-react';
 import { renderMarkdownText } from '@/components/markdownRenderer';
 import AudioManager from '@/components/AudioManager';
 import { RichTextarea } from '@/components/RichTextarea';
@@ -20,7 +20,7 @@ const PAYMENT_LABELS: Record<string, string> = {
 };
 
 const ProductDetailsCard: React.FC<ProductDetailsCardProps> = ({
-  isEditMode, role, currentUserProfile, products, deoNo,
+  isEditMode, currentUserProfile, products, deoNo,
   productVoiceNoteDriveIds, productDriveIds,
   pendingProductAudioFiles, pendingProductFiles,
   isProductSectionOpen, onProductSectionToggle, onTextChange,
@@ -134,7 +134,7 @@ const ProductDetailsCard: React.FC<ProductDetailsCardProps> = ({
               uploadedFiles={productDriveIds}
               onFileAdd={onProductFileAdd}
               onFileRemove={onProductFileRemove}
-              onDeleteUploadedFile={onDeleteUploadedFile}
+              onDeleteUploadedFile={(fileId) => onDeleteUploadedFile(fileId, 'product')}
             />
           </div>
         </div>

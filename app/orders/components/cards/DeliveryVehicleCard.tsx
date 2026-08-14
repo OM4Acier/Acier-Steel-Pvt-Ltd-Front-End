@@ -14,7 +14,7 @@ import { FileUploadZone } from '../FileUploadZone';
 import { PermissionGate } from '@/components/PermissionGate';
 
 const DeliveryVehicleCard: React.FC<DeliveryVehicleCardProps> = ({
-  isEditMode, role, isOperationsRole, canEditSite,
+  isEditMode, isOperationsRole,
   measurementKata, transportProvider, transportProviderName, vehicleNo, siteDeliveryInfo,
   isVehicleSectionOpen, onVehicleSectionToggle, onTextChange,
   onWeightScaleChange, onTransportProviderChange,

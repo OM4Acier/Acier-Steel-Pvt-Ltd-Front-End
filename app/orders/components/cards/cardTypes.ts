@@ -33,6 +33,13 @@ export interface ClientStatusCardProps {
   selectedShippingAddress?: string;
   /** Called when the operator picks a shipping address in edit mode. */
   onShippingAddressChange?: (address: string) => void;
+  // ── Permission flags (computed by parent) ──
+  canEditClient: boolean;
+  canEditContact: boolean;
+  canEditPaymentStatus: boolean;
+  canEditPartDelivery: boolean;
+  canEditHighPriority: boolean;
+  canEditStatusSelect: boolean;
 }
 
 export interface DeliveryVehicleCardProps {
@@ -56,7 +63,12 @@ export interface DeliveryVehicleCardProps {
   onVehicleFileAdd: (files: File[]) => void;
   onVehicleFileRemove: (index: number) => void;
   onDeleteUploadedFile: (fileId: string, stage: 'vehicle') => void;
-  isSaving: boolean;
+  // ── Permission flags (computed by parent) ──
+  canEditMeasurementKata: boolean;
+  canEditTransportProvider: boolean;
+  canEditVehicleNo: boolean;
+  canEditSiteInfo: boolean;
+  canEditVehicleFiles: boolean;
 }
 
 export interface ProductDetailsCardProps {
@@ -77,13 +89,16 @@ export interface ProductDetailsCardProps {
   onProductFileRemove: (index: number) => void;
   onProductAudioStaged: (files: File[]) => void;
   onProductAudioRemoved: (index: number) => void;
-  onDeleteUploadedFile: (fileId: string, stage: 'product') => void;
+  onDeleteUploadedFile: (fileId: string, stage: 'product' | 'vehicle' | 'invoice') => void;
   onUploadComplete: () => void;
   // Real-time values mirrored into the products text (live, recomputed on change)
   transportProvider?: TransportProvider;
   transportProviderName?: string;
   measurementKata?: MeasurementKata;
   customerPaymentStatus?: CustomerPaymentStatus;
+  // ── Permission flags (computed by parent) ──
+  canEditProducts: boolean;
+  canEditProductFiles: boolean;
 }
 
 export interface InvoiceDetailsCardProps {
@@ -108,6 +123,11 @@ export interface InvoiceDetailsCardProps {
   onInvoiceAudioRemoved: (index: number) => void;
   onDeleteUploadedFile: (fileId: string, stage: 'invoice') => void;
   onUploadComplete: () => void;
+  // ── Permission flags (computed by parent) ──
+  canEditInvoiceDetails: boolean;
+  canEditInvoiceNo: boolean;
+  canEditInvoiceIssueDate: boolean;
+  canEditInvoiceFiles: boolean;
 }
 
 export interface OrderActionsFooterProps {

@@ -21,9 +21,16 @@ import {
   canEditOperationsSpecificFields,
   canEditAccountantSpecificFields,
   canEditSiteInfo,
-  canMarkAsPaid, canCreatePartDelivery,
-  isSuperAdmin, isOperations,
-  canExportPdf, canConfigurePdf,
+  canMarkAsPaid,
+  canCreatePartDelivery,
+  isSuperAdmin,
+  isOperations,
+  canExportPdf,
+  canConfigurePdf,
+  canEditInvoiceDetailsField,
+  canEditInvoiceNumberField,
+  canEditInvoiceIssueDateField,
+  canEditVehicleNoField,
 } from '../permissions';
 import { canTransitionToGeneral } from '../constants';
 import {
@@ -38,8 +45,6 @@ import DeliveryVehicleCard from './cards/DeliveryVehicleCard';
 import ProductDetailsCard from './cards/ProductDetailsCard';
 import InvoiceDetailsCard from './cards/InvoiceDetailsCard';
 import OrderActionsFooter from './cards/OrderActionsFooter';
-
-// PDF utilities
 import {
   loadSuperAdminPdfConfig,
   getEffectiveFieldVisibility,
@@ -51,7 +56,32 @@ import { UserProfile } from '@/types/rbac.types';
 import { CustomerDialog } from '../../customers/components/CustomerDialog';
 import { customersApi, CustomerSummary } from '@/lib/api/endpoints/customers';
 
-// Formats a Date/timestamp to a local `YYYY-MM-DD` string (avoids UTC off-by-one near midnight).
+// ============================================================
+// TYPES
+// ============================================================
+interface OrderDetailsDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  order: Order | null;
+  currentUserProfile: UserProfile | null;
+  onOrderUpdated: () => void;
+  onShowMessage: (message: DialogMessageType) => void;
+  paymentStatusGradients: Record<string, string>;
+}
+
+interface PendingChanges {
+  textFields: Partial<Order>;
+  productFiles: File[];
+  vehicleFiles: File[];
+  invoiceFiles: File[];
+  productAudioFiles: File[];
+  invoiceAudioFiles: File[];
+  hasChanges: boolean;
+}
+
+// ============================================================
+// UTILITIES
+// ============================================================
 const toLocalISODate = (value: string | Date): string => {
   const d = typeof value === 'string' ? new Date(value) : value;
   const y = d.getFullYear();
@@ -60,8 +90,6 @@ const toLocalISODate = (value: string | Date): string => {
   return `${y}-${m}-${day}`;
 };
 
-// Invoice issue date is only allowed for today and the previous day (local calendar day).
-// Returns ISO `YYYY-MM-DD` strings formatted from local date components.
 const getInvoiceIssueDateBounds = (): { min: string; max: string } => {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -76,33 +104,16 @@ const getInvoiceIssueDateBounds = (): { min: string; max: string } => {
   return { min: fmt(yesterday), max: fmt(today) };
 };
 
-interface OrderDetailsDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  order: Order | null;
-  currentUserProfile: UserProfile | null;
-  onOrderUpdated: () => void;
-  onShowMessage: (message: DialogMessageType) => void;
-  paymentStatusGradients: Record<string, string>;
-}
-
-// Centralized pending changes tracker
-// 1. Update PendingChanges interface to include audio files:
-interface PendingChanges {
-  textFields: Partial<Order>;
-  productFiles: File[];
-  vehicleFiles: File[];
-  invoiceFiles: File[];
-  productAudioFiles: File[];      // NEW
-  invoiceAudioFiles: File[];      // NEW
-  hasChanges: boolean;
-}
-
+// ============================================================
+// COMPONENT
+// ============================================================
 export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   isOpen, onClose, order, currentUserProfile,
   onOrderUpdated, onShowMessage, paymentStatusGradients,
 }) => {
-  // UI State
+  // ------------------------------------------------------------
+  // State
+  // ------------------------------------------------------------
   const [isEditMode, setIsEditMode] = useState(false);
   const [isMoreActionsOpen, setIsMoreActionsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -111,41 +122,136 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
   const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
 
-  // ── PDF Export State ──────────────────────────────────────────
   const [isPdfConfigOpen, setIsPdfConfigOpen] = useState(false);
   const [pdfFieldConfig, setPdfFieldConfig] = useState<PdfFieldVisibilityMap>(() =>
     loadSuperAdminPdfConfig()
   );
 
-  // Section toggles
   const [productSectionOpen, setProductSectionOpen] = useState(false);
   const [vehicleSectionOpen, setVehicleSectionOpen] = useState(false);
   const [invoiceSectionOpen, setInvoiceSectionOpen] = useState(false);
   const [isAdditionalInfoOpen, setAdditionalInfoOpen] = useState(false);
 
-  // Single source of truth for displayed data
-  // Single source of truth for displayed data
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
-
-  // Pending changes (only in edit mode)
   const [pendingChanges, setPendingChanges] = useState<PendingChanges>({
     textFields: {},
     productFiles: [],
     vehicleFiles: [],
     invoiceFiles: [],
-    productAudioFiles: [],      // NEW
-    invoiceAudioFiles: [],     // NEW
+    productAudioFiles: [],
+    invoiceAudioFiles: [],
     hasChanges: false,
   });
-
   const [mergePreviews, setMergePreviews] = useState<{
     product?: { fileCount: number; totalSize: number };
     vehicle?: { fileCount: number; totalSize: number };
     invoice?: { fileCount: number; totalSize: number };
   }>({});
 
+  const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
+  const [resolvedCustomer, setResolvedCustomer] = useState<CustomerSummary | null>(null);
+  const [isResolvingCustomer, setIsResolvingCustomer] = useState(false);
+  const [shippingAddressOptions, setShippingAddressOptions] = useState<string[]>([]);
+  const [selectedShippingAddress, setSelectedShippingAddress] = useState('Ask for client');
 
-  // Initialize order data
+  // ------------------------------------------------------------
+  // Derived display data
+  // ------------------------------------------------------------
+  const displayOrder = React.useMemo(() => {
+    if (!currentOrder) return null;
+    if (!isEditMode) return currentOrder;
+
+    const mergedDetails = {
+      ...currentOrder.details,
+      ...(pendingChanges.textFields.details || {}),
+    };
+
+    return {
+      ...currentOrder,
+      ...pendingChanges.textFields,
+      details: mergedDetails,
+    };
+  }, [currentOrder, pendingChanges, isEditMode]);
+
+  const isPaymentPending =
+    displayOrder?.customerPaymentStatus === 'new-unpaid' &&
+    displayOrder?.status === 'Ready for Dispatch';
+
+  const isOpsUnpaidWarning =
+    isOperations(currentUserProfile?.role ?? null) &&
+    displayOrder?.customerPaymentStatus === 'new-unpaid';
+
+  const dialogBackgroundClass = isOpsUnpaidWarning
+    ? 'bg-gradient-to-br from-red-100 via-red-50 to-red-100 dark:from-red-950 dark:via-gray-800 dark:to-red-950 shadow-[inset_0_0_50px_rgba(220,38,38,0.2)]'
+    : displayOrder
+      ? paymentStatusGradients[displayOrder.customerPaymentStatus] || 'bg-white dark:bg-gray-800'
+      : 'bg-white dark:bg-gray-800';
+
+  // ------------------------------------------------------------
+  // Permission flags (computed centrally, passed to cards)
+  // ------------------------------------------------------------
+  const role = currentUserProfile?.role ?? null;
+  const orderStatus = displayOrder?.status;
+  const canEditClient = canEditSalesSpecificFields(role);
+  const canEditContact = canEditSalesSpecificFields(role);
+  const canEditPaymentStatus = canEditSalesSpecificFields(role);
+  const canEditPartDelivery = canEditOperationsSpecificFields(role);
+  const canEditHighPriority = canEditSalesSpecificFields(role);
+  const canEditStatusSelect = isSuperAdmin(role);
+  const canEditMeasurementKata = canEditOperationsSpecificFields(role);
+  const canEditTransportProvider = canEditOperationsSpecificFields(role);
+  const canEditVehicleNo = canEditVehicleNoField(role);
+  const canEditSiteInfoPerm = currentUserProfile ? canEditSiteInfo(currentUserProfile) : false;
+  const canEditVehicleFiles = canEditOperationsSpecificFields(role);
+  const canEditProducts = canEditSalesSpecificFields(role);
+  const canEditProductFiles = canEditSalesSpecificFields(role);
+  const canEditInvoiceDetails = canEditInvoiceDetailsField(role, orderStatus);
+  const canEditInvoiceNo = canEditInvoiceNumberField(role, orderStatus);
+  const canEditInvoiceIssueDate = canEditInvoiceIssueDateField(role, orderStatus);
+  const canEditInvoiceFiles = canEditAccountantSpecificFields(role, orderStatus);
+  const showInvoiceCard = !isOperations(role);
+
+  // ------------------------------------------------------------
+  // Reset helpers
+  // ------------------------------------------------------------
+  const resetPendingChanges = () => {
+    setPendingChanges({
+      textFields: {},
+      productFiles: [],
+      vehicleFiles: [],
+      invoiceFiles: [],
+      productAudioFiles: [],
+      invoiceAudioFiles: [],
+      hasChanges: false,
+    });
+    setMergePreviews({});
+  };
+
+  const refreshCurrentOrderFromServer = React.useCallback(async (deoNo: string) => {
+    const freshOrderData = await apiService.fetchOrders();
+    const freshOrder = Array.isArray(freshOrderData)
+      ? freshOrderData.find((o: Order) => o.deoNo === deoNo)
+      : freshOrderData;
+
+    if (freshOrder) {
+      const normalizedFreshOrder: Order = {
+        ...freshOrder,
+        details: {
+          ...freshOrder.details,
+          productDriveIds: freshOrder.details?.productDriveIds || [],
+          vehicleDriveIds: freshOrder.details?.vehicleDriveIds || [],
+          invoiceDriveId: freshOrder.details?.invoiceDriveId || [],
+          productVoiceNoteDriveIds: freshOrder.details?.productVoiceNoteDriveIds || [],
+          invoiceVoiceNoteDriveIds: freshOrder.details?.invoiceVoiceNoteDriveIds || [],
+        },
+      };
+      setCurrentOrder(normalizedFreshOrder);
+    }
+  }, []);
+
+  // ------------------------------------------------------------
+  // Initialization
+  // ------------------------------------------------------------
   useEffect(() => {
     if (order && isOpen) {
       const normalizedOrder = {
@@ -160,9 +266,9 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       setCurrentOrder(normalizedOrder);
       setIsEditMode(false);
       resetPendingChanges();
-      // Pre-load the customer's shipping addresses so the edit-mode shipping
-      // selector is available immediately (no need to open the customer dialog
-      // first). Resolved by client name, matching resolveCustomer() below.
+
+      setResolvedCustomer(null);
+
       void (async () => {
         if (!normalizedOrder.client) return;
         try {
@@ -187,45 +293,20 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     }
   }, [order, isOpen]);
 
-
-  // 2. Initialize audio file arrays in resetPendingChanges:
-  const resetPendingChanges = () => {
-    setPendingChanges({
-      textFields: {},
-      productFiles: [],
-      vehicleFiles: [],
-      invoiceFiles: [],
-      productAudioFiles: [],        // NEW
-      invoiceAudioFiles: [],        // NEW
-      hasChanges: false,
-    });
-    setMergePreviews({});
-  };
-
-  // ── Customer edit (billing / shipping / contact) from order context ──────
-  // Restricted: only contacts / addresses are editable; name/GST/PAN stay locked.
-  const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
-  const [resolvedCustomer, setResolvedCustomer] = useState<CustomerSummary | null>(null);
-  const [isResolvingCustomer, setIsResolvingCustomer] = useState(false);
-  // Edit-mode shipping-address selection (mirrors CreateOrderDialog)
-  const [shippingAddressOptions, setShippingAddressOptions] = useState<string[]>([]);
-  const [selectedShippingAddress, setSelectedShippingAddress] = useState('Ask for client');
-
+  // ------------------------------------------------------------
+  // Customer flow
+  // ------------------------------------------------------------
   const handleEditCustomer = () => {
     if (resolvedCustomer) {
       setCustomerDialogOpen(true);
     } else if (!isResolvingCustomer) {
-      resolveCustomer();
+      void resolveCustomer();
     }
   };
 
-  // After a customer is resolved/edited, sync its identity + billing/shipping
-  // info into the order's invoiceDetails field (the same block CreateOrderDialog
-  // auto-injects at order creation) so the PDF stays in sync. Only runs in edit
-  // mode and only when the operator explicitly saves — never silently.
   const syncCustomerInfoIntoInvoice = React.useCallback(async (customer: CustomerSummary) => {
     if (!isEditMode) return;
-    // Pull latest addresses from server
+
     let billingAddress = '';
     let shippingAddresses: string[] = [];
     try {
@@ -240,15 +321,10 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       client: customer.name,
       gst: customer.gst || '',
       billing: billingAddress,
-      shipping: shippingAddresses.length
-        ? shippingAddresses.join(' | ')
-        : 'Ask for client',
+      shipping: shippingAddresses.length ? shippingAddresses.join(' | ') : 'Ask for client',
     });
 
     const current = currentOrder?.details?.invoiceDetails || '';
-    // Locate the fenced customer-info block (client-info-start / client-info-end)
-    // and replace it. All other text in the invoice field is preserved. If no
-    // fenced block exists yet, it is inserted.
     const next = replaceCustomerInfoBlock(current, block);
     handleTextChange({ target: { id: 'invoiceDetails', value: next } } as any);
   }, [isEditMode, currentOrder]);
@@ -258,21 +334,15 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     setIsResolvingCustomer(true);
     try {
       const clients = await customersApi.fetchCustomers();
-      // Match by name. The client field on the order is the customer's name.
-      // Filter out any null/undefined entries returned by the API first.
-      const match = clients.find(
-        (c) => c && c.name === currentOrder.client,
-      ) || null;
+      const match = clients.find((c) => c && c.name === currentOrder.client) || null;
       setResolvedCustomer(match);
-      // Load shipping addresses so the edit-mode selector is populated
+
       if (match) {
         try {
           const addresses = await customersApi.fetchCustomerAddresses(match.id);
           setShippingAddressOptions(
             (addresses.shippingAddresses || []).map((s) => s.label).filter(Boolean),
           );
-          // Default selection: keep "Ask for client" if no siteDeliveryInfo; else
-          // try to match the order's current siteDeliveryInfo to a label.
           const current = currentOrder.details?.siteDeliveryInfo;
           if (current && (addresses.shippingAddresses || []).some((s) => s.address === current)) {
             const lbl = (addresses.shippingAddresses || []).find((s) => s.address === current)?.label;
@@ -284,6 +354,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
           console.error('Failed to load shipping addresses for selector', addrErr);
         }
       }
+
       setCustomerDialogOpen(true);
     } catch (err) {
       console.error('Failed to resolve customer for edit', err);
@@ -292,44 +363,26 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     }
   }, [currentOrder?.client, currentOrder?.details?.siteDeliveryInfo]);
 
-  // Edit-mode: operator picks a shipping address from the customer's saved hubs.
-  // Updates the order's siteDeliveryInfo and re-syncs the *Shipping Address* line
-  // inside the fenced customer-info block (so the rest of the invoice field is
-  // preserved). Mirrors CreateOrderDialog.handleShippingAddressChange.
   const handleShippingAddressChange = React.useCallback((addr: string) => {
     setSelectedShippingAddress(addr);
-    // Update siteDeliveryInfo (editable detail field)
-    handleTextChange({ target: { id: 'siteDeliveryInfo', value: addr !== 'Ask for client' ? addr : '' } } as any);
-    // Re-sync the *Shipping Address* field inside the fenced customer-info block.
-    // replaceCustomerField updates only the *Shipping Address* line (or appends
-    // it), preserving all other invoice text.
+    handleTextChange({
+      target: { id: 'siteDeliveryInfo', value: addr !== 'Ask for client' ? addr : '' },
+    } as any);
+
     const current = currentOrder?.details?.invoiceDetails || '';
     const next = replaceCustomerField(current, 'shipping', addr);
     handleTextChange({ target: { id: 'invoiceDetails', value: next } } as any);
   }, [currentOrder]);
 
-  React.useEffect(() => {
-    if (order && isOpen) {
-      setResolvedCustomer(null);
-    }
-  }, [order, isOpen]);
-
   const handleCustomerSuccess = (updated: CustomerSummary | null) => {
-    // Guard: the upstream API/update can resolve to null (e.g. empty data
-    // envelope). Never crash on `updated.name` — bail out cleanly.
     if (!updated) {
       setCustomerDialogOpen(false);
       return;
     }
+
     setResolvedCustomer(updated);
     setCustomerDialogOpen(false);
-    // Update the live order record directly (NOT via pendingChanges/onTextChange)
-    // so the form stays clean with zero "pending" flags while the displayed
-    // client / contact values reflect the customer update.
-    // (Only syncs name + primary phone — orgContact is a separate order field
-    //  not stored on the customer record, and billing/shipping addresses live
-    //  in the CustomerDialog, not on the order.)
-    // Guard against a null `prev` (dialog may have reset currentOrder) — no `!`.
+
     setCurrentOrder((prev) => {
       if (!prev) return prev;
       return {
@@ -338,285 +391,31 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
         contactNo: updated.phones?.[0] || prev.contactNo,
       };
     });
-    // In edit mode, also push the customer's identity + billing/shipping block
-    // into invoiceDetails (mirrors CreateOrderDialog auto-injection) so the PDF
-    // stays in sync. No-op in view mode (field is read-only there).
+
     void syncCustomerInfoIntoInvoice(updated);
     onOrderUpdated();
   };
-  // Compute display order (merge current + pending)
-  const displayOrder = React.useMemo(() => {
-    if (!currentOrder) return null;
-    if (!isEditMode) return currentOrder;
 
-    // Deep merge for details
-    const mergedDetails = {
-      ...currentOrder.details,
-      ...(pendingChanges.textFields.details || {}),
-    };
+  // ------------------------------------------------------------
+  // Text / field changes
+  // ------------------------------------------------------------
+  const detailsFieldIds = [
+    'orderDate',
+    'invoiceDetails',
+    'vehicleNo',
+    'invoiceNo',
+    'invoiceIssueDate',
+    'siteDeliveryInfo',
+    'measurementKata',
+    'transportProvider',
+    'transportProviderName',
+  ];
 
-    return {
-      ...currentOrder,
-      ...pendingChanges.textFields,
-      details: mergedDetails,
-    };
-  }, [currentOrder, pendingChanges, isEditMode]);
-
-  // ============= CENTRALIZED UPDATE HANDLER =============
-  const handleSaveAllChanges = useCallback(async () => {
-    if (!currentUserProfile || !currentOrder) {
-      onShowMessage({ type: 'error', text: 'Please log in to save changes.' });
-      return;
-    }
-
-    // Validate contact number if changed
-    if (pendingChanges.textFields.contactNo) {
-      const contact = pendingChanges.textFields.contactNo.trim();
-      if (contact.length !== 10 || !/^\d{10}$/.test(contact)) {
-        onShowMessage({ type: 'error', text: 'Contact No. must be exactly 10 digits.' });
-        return;
-      }
-    }
-
-    setIsSaving(true);
-    onShowMessage({ type: 'info', text: 'Saving changes...' });
-    console.time('saveAllChanges');
-
-    try {
-      // Step 1: Save text field changes if any
-      if (Object.keys(pendingChanges.textFields).length > 0) {
-        const changes = buildChangeDescription(currentOrder, pendingChanges.textFields);
-        const historyEntry: EditHistoryEntry = {
-          timestamp: Date.now(),
-          editorName: currentUserProfile.name || currentUserProfile.email,
-          description: changes,
-        };
-
-        const payload = buildUpdatePayload(pendingChanges.textFields);
-        await apiService.updateOrder(currentOrder.deoNo, payload, historyEntry);
-      }
-
-      // Step 2: Upload files sequentially (product -> vehicle -> invoice)
-      const fileUploads: Array<{ stage: 'product' | 'vehicle' | 'invoice' | 'productVoiceNote' | 'invoiceVoiceNote'; files: File[] }> = [];
-
-      if (pendingChanges.productFiles.length > 0) {
-        fileUploads.push({ stage: 'product', files: pendingChanges.productFiles });
-      }
-      if (pendingChanges.vehicleFiles.length > 0) {
-        fileUploads.push({ stage: 'vehicle', files: pendingChanges.vehicleFiles });
-      }
-      if (pendingChanges.invoiceFiles.length > 0) {
-        fileUploads.push({ stage: 'invoice', files: pendingChanges.invoiceFiles });
-      }
-      // NEW: Add audio file uploads
-      if (pendingChanges.productAudioFiles.length > 0) {
-        fileUploads.push({ stage: 'productVoiceNote', files: pendingChanges.productAudioFiles });
-      }
-      if (pendingChanges.invoiceAudioFiles.length > 0) {
-        fileUploads.push({ stage: 'invoiceVoiceNote', files: pendingChanges.invoiceAudioFiles });
-      }
-
-      // ... (Start of the fileUploads array preparation)
-
-
-      for (const upload of fileUploads) {
-        try {
-          // Show processing message
-          onShowMessage({
-            type: 'info',
-            text: `Processing ${upload.files.length} file(s) for ${upload.stage}...`
-          });
-
-
-
-          // Audio files don't need PDF processing
-          if (upload.stage === 'productVoiceNote' || upload.stage === 'invoiceVoiceNote') {
-
-            await fileApi.uploadFiles(
-              currentOrder.deoNo,
-              upload.files,
-              upload.stage,
-              "order"
-            );
-
-            onShowMessage({
-              type: 'info',
-              text: `Uploaded ${upload.files.length} audio file(s) for ${upload.stage}`
-            });
-          } else {
-            // Process images/PDFs to single PDF per section
-            const { pdfBytes, filename } = await processFilesToPdf(upload.files, upload.stage);
-            const uploadObject = await pdfBytesToFile(pdfBytes, filename);
-
-            onShowMessage({
-              type: 'info',
-              text: `Created ${filename} (${formatFileSize(pdfBytes.length)})`
-            });
-
-            await apiService.uploadFile(
-              currentOrder.deoNo,
-              upload.stage,
-              [uploadObject]
-            );
-          }
-        } catch (error) {
-          console.error(`Failed to process ${upload.stage} files:`, error);
-          onShowMessage({
-            type: 'error',
-            text: `Failed to process ${upload.stage} files: ${error}`
-          });
-          throw error;
-        }
-      }
-
-
-
-
-      // Step 3: Fetch fresh data from server
-      const freshOrderData = await apiService.fetchOrders();
-
-      // Handle both single order and array response
-      const freshOrder = Array.isArray(freshOrderData)
-        ? freshOrderData.find((o: Order) => o.deoNo === currentOrder.deoNo)
-        : freshOrderData;
-
-      if (freshOrder) {
-        const normalizedFreshOrder: Order = {
-          ...freshOrder,
-          details: {
-            ...freshOrder.details,
-            productDriveIds: freshOrder.details?.productDriveIds || [],
-            vehicleDriveIds: freshOrder.details?.vehicleDriveIds || [],
-            invoiceDriveId: freshOrder.details?.invoiceDriveId || [],
-            productVoiceNoteDriveIds: freshOrder.details?.productVoiceNoteDriveIds || [],
-            invoiceVoiceNoteDriveIds: freshOrder.details?.invoiceVoiceNoteDriveIds || [],
-          },
-        };
-
-        // Update local state with fresh data
-        setCurrentOrder(normalizedFreshOrder);
-      }
-
-      // Step 4: Cleanup and exit edit mode
-      resetPendingChanges();
-      setMergePreviews({});
-      setIsEditMode(false);
-
-      // Refresh parent list
-      //onOrderUpdated();
-
-      const totalFiles = fileUploads.reduce((sum, u) => sum + u.files.length, 0);
-      const message = totalFiles > 0
-        ? `Order updated successfully with ${totalFiles} file(s)!`
-        : 'Order updated successfully!';
-
-      onShowMessage({ type: 'success', text: message });
-
-    } catch (e: any) {
-      console.error('Save all changes failed:', e);
-      const errorMessage = process.env.NODE_ENV === 'production'
-        ? 'Failed to save changes. Please try again.'
-        : `Save failed: ${e.message}`;
-      onShowMessage({ type: 'error', text: errorMessage });
-    } finally {
-      setIsSaving(false);
-      //onOrderUpdated();
-      console.timeEnd('saveAllChanges');
-    }
-  }, [currentOrder, pendingChanges, currentUserProfile, onShowMessage, onOrderUpdated]);
-
-  // Helper: Build change description
-  const buildChangeDescription = (original: Order, changes: Partial<Order>): string => {
-    const descriptions: string[] = [];
-
-    if (changes.client && changes.client !== original.client) {
-      descriptions.push(`Client to '${changes.client}'`);
-    }
-    if (changes.contactNo && changes.contactNo !== original.contactNo) {
-      descriptions.push(`Contact to '${changes.contactNo}'`);
-    }
-    if (changes.customerPaymentStatus && changes.customerPaymentStatus !== original.customerPaymentStatus) {
-      descriptions.push(`Payment status to '${changes.customerPaymentStatus}'`);
-    }
-    if (changes.products && changes.products !== original.products) {
-      descriptions.push('Product details');
-    }
-    if (changes.partDelivery !== undefined && changes.partDelivery !== original.partDelivery) {
-      descriptions.push(`Part delivery: ${changes.partDelivery ? 'Yes' : 'No'}`);
-    }
-    if (changes.isHighPriority !== undefined && changes.isHighPriority !== original.isHighPriority) {
-      descriptions.push(`High priority: ${changes.isHighPriority ? 'Yes' : 'No'}`);
-    }
-    if (changes.details?.invoiceDetails && changes.details.invoiceDetails !== original.details?.invoiceDetails) {
-      descriptions.push('Invoice details');
-    }
-    if (changes.details?.vehicleNo && changes.details.vehicleNo !== original.details?.vehicleNo) {
-      descriptions.push(`Vehicle No. to '${changes.details.vehicleNo}'`);
-    }
-    if (changes.details?.invoiceNo && changes.details.invoiceNo !== original.details?.invoiceNo) {
-      descriptions.push(`Invoice No. to '${changes.details.invoiceNo}'`);
-    }
-    if (changes.details?.invoiceIssueDate && changes.details.invoiceIssueDate !== original.details?.invoiceIssueDate) {
-      descriptions.push(`Invoice issue date to '${changes.details.invoiceIssueDate}'`);
-    }
-
-    return descriptions.length > 0
-      ? `Updated: ${descriptions.join(', ')}`
-      : 'Minor updates';
-  };
-
-  // Helper: Build API payload
-  const buildUpdatePayload = (changes: Partial<Order>): Partial<Order> => {
-    const payload: Partial<Order> = {};
-
-    if (changes.client) payload.client = changes.client;
-    if (changes.contactNo) payload.contactNo = changes.contactNo;
-    if (changes.customerPaymentStatus) payload.customerPaymentStatus = changes.customerPaymentStatus;
-    if (changes.products) payload.products = changes.products;
-    if (changes.status) payload.status = changes.status;
-    if (changes.isHighPriority !== undefined) payload.isHighPriority = changes.isHighPriority;
-    if (changes.partDelivery !== undefined) payload.partDelivery = changes.partDelivery;
-    if (changes.organizationContact) payload.organizationContact = changes.organizationContact;
-
-    // Build details object only if there are detail changes
-    if (changes.details && Object.keys(changes.details).length > 0) {
-      payload.details = {};
-
-      if (changes.details.orderDate) payload.details.orderDate = changes.details.orderDate;
-      if (changes.details.invoiceDetails !== undefined) payload.details.invoiceDetails = changes.details.invoiceDetails;
-      if (changes.details.vehicleNo !== undefined) payload.details.vehicleNo = changes.details.vehicleNo;
-      if (changes.details.invoiceNo !== undefined) payload.details.invoiceNo = changes.details.invoiceNo;
-      if (changes.details.invoiceIssueDate !== undefined) payload.details.invoiceIssueDate = changes.details.invoiceIssueDate;
-      if (changes.details.siteDeliveryInfo !== undefined) payload.details.siteDeliveryInfo = changes.details.siteDeliveryInfo;
-      if (changes.details.measurementKata) payload.details.measurementKata = changes.details.measurementKata;
-      if (changes.details.transportProvider) payload.details.transportProvider = changes.details.transportProvider;
-      if (changes.details.transportProviderName !== undefined) payload.details.transportProviderName = changes.details.transportProviderName;
-    }
-
-    return payload;
-  };
-
-  // ============= TEXT FIELD CHANGE HANDLERS =============
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target;
 
-    setPendingChanges(prev => {
-      // invoiceIssueDate is a details field per the OrderDetails type, but the
-      // backend omits it on existing orders — so `id in currentOrder.details`
-      // returns false and the edit lands on the top-level textFields instead of
-      // .details, leaving the input value stale. Force it into details.
-      const detailsFields = [
-        'orderDate',
-        'invoiceDetails',
-        'vehicleNo',
-        'invoiceNo',
-        'invoiceIssueDate',
-        'siteDeliveryInfo',
-        'measurementKata',
-        'transportProvider',
-        'transportProviderName'
-      ];
-      const isDetailsField = detailsFields.includes(id);
+    setPendingChanges((prev) => {
+      const isDetailsField = detailsFieldIds.includes(id);
 
       if (isDetailsField) {
         return {
@@ -644,7 +443,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   };
 
   const handlePaymentStatusChange = (value: string) => {
-    setPendingChanges(prev => ({
+    setPendingChanges((prev) => ({
       ...prev,
       textFields: { ...prev.textFields, customerPaymentStatus: value as any },
       hasChanges: true,
@@ -652,7 +451,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   };
 
   const handlePartDeliveryChange = (checked: boolean) => {
-    setPendingChanges(prev => ({
+    setPendingChanges((prev) => ({
       ...prev,
       textFields: { ...prev.textFields, partDelivery: checked },
       hasChanges: true,
@@ -660,172 +459,131 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   };
 
   const handleHighPriorityChange = (checked: boolean) => {
-    setPendingChanges(prev => ({
+    setPendingChanges((prev) => ({
       ...prev,
       textFields: { ...prev.textFields, isHighPriority: checked },
       hasChanges: true,
     }));
   };
 
-  // ============= FILE HANDLERS =============
+  const handleStatusSelectChange = (value: string) => {
+    setPendingChanges((prev) => ({
+      ...prev,
+      textFields: { ...prev.textFields, status: value as any },
+      hasChanges: true,
+    }));
+  };
+
+  const handleWeightScaleChange = (value: string) => {
+    setPendingChanges((prev) => ({
+      ...prev,
+      textFields: {
+        ...prev.textFields,
+        details: { ...prev.textFields.details, measurementKata: value as any },
+      },
+      hasChanges: true,
+    }));
+  };
+
+  const handleTransportProviderChange = (value: string) => {
+    setPendingChanges((prev) => ({
+      ...prev,
+      textFields: {
+        ...prev.textFields,
+        details: { ...prev.textFields.details, transportProvider: value as any },
+      },
+      hasChanges: true,
+    }));
+  };
+
+  // ------------------------------------------------------------
+  // File changes
+  // ------------------------------------------------------------
+  const updateMergePreviewForStage = (stage: 'product' | 'vehicle' | 'invoice', newFiles: File[]) => {
+    if (newFiles.length > 1) {
+      const totalSize = newFiles.reduce((sum, f) => sum + f.size, 0);
+      setMergePreviews((prev) => ({
+        ...prev,
+        [stage]: {
+          fileCount: newFiles.length,
+          totalSize,
+        },
+      }));
+    } else {
+      setMergePreviews((prev) => {
+        const updated = { ...prev };
+        delete updated[stage];
+        return updated;
+      });
+    }
+  };
+
+  const computeHasChanges = (
+    prev: PendingChanges,
+    productFiles: File[],
+    vehicleFiles: File[],
+    invoiceFiles: File[],
+  ) =>
+    productFiles.length + vehicleFiles.length + invoiceFiles.length > 1 ||
+    Object.keys(prev.textFields).length > 0;
+
   const handleFileAdd = (files: File[], stage: 'product' | 'vehicle' | 'invoice') => {
-    setPendingChanges(prev => {
-      const existingFiles = prev[`${stage}Files` as keyof typeof prev] as File[];
+    setPendingChanges((prev) => {
+      const existingFiles = prev[`${stage}Files` as keyof Pick<PendingChanges, 'productFiles' | 'vehicleFiles' | 'invoiceFiles'>] as File[];
       const newFiles = [...existingFiles, ...files];
-
-      // Calculate merge preview if multiple files
-      if (newFiles.length > 1) {
-        const totalSize = newFiles.reduce((sum, f) => sum + f.size, 0);
-        setMergePreviews(prevPreviews => ({
-          ...prevPreviews,
-          [stage]: {
-            fileCount: newFiles.length,
-            totalSize,
-          },
-        }));
-      } else {
-        setMergePreviews(prevPreviews => {
-          const updated = { ...prevPreviews };
-          delete updated[stage];
-          return updated;
-        });
-      }
+      updateMergePreviewForStage(stage, newFiles);
 
       return {
         ...prev,
         [`${stage}Files`]: newFiles,
-        hasChanges: true,
+        hasChanges: computeHasChanges(prev, prev.productFiles, prev.vehicleFiles, prev.invoiceFiles),
       };
     });
   };
 
-  // 4. Update handleFileRemove to update merge preview
   const handleFileRemove = (index: number, stage: 'product' | 'vehicle' | 'invoice') => {
-    setPendingChanges(prev => {
-      const newFiles = (prev[`${stage}Files` as keyof typeof prev] as File[]).filter((_, i) => i !== index);
-
-      // Update merge preview
-      if (newFiles.length > 1) {
-        const totalSize = newFiles.reduce((sum, f) => sum + f.size, 0);
-        setMergePreviews(prevPreviews => ({
-          ...prevPreviews,
-          [stage]: {
-            fileCount: newFiles.length,
-            totalSize,
-          },
-        }));
-      } else {
-        setMergePreviews(prevPreviews => {
-          const updated = { ...prevPreviews };
-          delete updated[stage];
-          return updated;
-        });
-      }
+    setPendingChanges((prev) => {
+      const existingFiles = prev[`${stage}Files` as keyof Pick<PendingChanges, 'productFiles' | 'vehicleFiles' | 'invoiceFiles'>] as File[];
+      const newFiles = existingFiles.filter((_, i) => i !== index);
+      updateMergePreviewForStage(stage, newFiles);
 
       return {
         ...prev,
         [`${stage}Files`]: newFiles,
-        hasChanges: pendingChanges.productFiles.length + pendingChanges.vehicleFiles.length + pendingChanges.invoiceFiles.length > 1 ||
-          Object.keys(pendingChanges.textFields).length > 0,
+        hasChanges: computeHasChanges(prev, prev.productFiles, prev.vehicleFiles, prev.invoiceFiles),
       };
     });
   };
 
-  // 3. Add audio file handler (add after handleFileRemove):
   const handleAudioFileAdd = (files: File[], stage: 'product' | 'invoice') => {
-    setPendingChanges(prev => {
+    setPendingChanges((prev) => {
       const stageKey = `${stage}AudioFiles` as 'productAudioFiles' | 'invoiceAudioFiles';
-      const existingFiles = prev[stageKey];
-      const newFiles = [...existingFiles, ...files];
-
       return {
         ...prev,
-        [stageKey]: newFiles,
+        [stageKey]: [...prev[stageKey], ...files],
         hasChanges: true,
       };
     });
   };
 
   const handleAudioFileRemove = (index: number, stage: 'product' | 'invoice') => {
-    setPendingChanges(prev => {
+    setPendingChanges((prev) => {
       const stageKey = `${stage}AudioFiles` as 'productAudioFiles' | 'invoiceAudioFiles';
       const newFiles = prev[stageKey].filter((_, i) => i !== index);
 
       return {
         ...prev,
         [stageKey]: newFiles,
-        hasChanges: pendingChanges.productFiles.length +
-          pendingChanges.vehicleFiles.length +
-          pendingChanges.invoiceFiles.length +
-          pendingChanges.productAudioFiles.length +
-          pendingChanges.invoiceAudioFiles.length > 1 ||
-          Object.keys(pendingChanges.textFields).length > 0,
+        hasChanges:
+          newFiles.length +
+          prev.productFiles.length +
+          prev.vehicleFiles.length +
+          prev.invoiceFiles.length >
+            1 ||
+          Object.keys(prev.textFields).length > 0,
       };
     });
   };
-
-  // Stable callbacks passed to extracted card components — see block below.
-
-  const handleProductAudioStaged = useCallback(
-    (files: File[]) => handleAudioFileAdd(files, 'product'),
-    []
-  );
-  const handleProductAudioRemoved = useCallback(
-    (index: number) => handleAudioFileRemove(index, 'product'),
-    []
-  );
-  const handleInvoiceAudioStaged = useCallback(
-    (files: File[]) => handleAudioFileAdd(files, 'invoice'),
-    []
-  );
-  const handleInvoiceAudioRemoved = useCallback(
-    (index: number) => handleAudioFileRemove(index, 'invoice'),
-    []
-  );
-
-  // ── Stable callbacks passed to extracted card components ──────────────
-  // Wrapping these in useCallback keeps their identity stable so React.memo
-  // on the cards actually isolates re-renders (inline arrows would defeat it).
-  const onTextChange = useCallback(handleTextChange, []);
-  const onPaymentStatusChange = useCallback(handlePaymentStatusChange, []);
-  const onPartDeliveryChange = useCallback(handlePartDeliveryChange, []);
-  const onHighPriorityChange = useCallback(handleHighPriorityChange, []);
-  const onStatusSelectChange = useCallback(
-    (value: string) => setPendingChanges(prev => ({
-      ...prev,
-      textFields: { ...prev.textFields, status: value as any },
-      hasChanges: true,
-    })),
-    []
-  );
-  const onWeightScaleChange = useCallback(
-    (value: string) => setPendingChanges(prev => ({
-      ...prev,
-      textFields: { ...prev.textFields, details: { ...prev.textFields.details, measurementKata: value as any } },
-      hasChanges: true,
-    })),
-    []
-  );
-  const onTransportProviderChange = useCallback(
-    (value: string) => setPendingChanges(prev => ({
-      ...prev,
-      textFields: { ...prev.textFields, details: { ...prev.textFields.details, transportProvider: value as any } },
-      hasChanges: true,
-    })),
-    []
-  );
-  const onVehicleFileAdd = useCallback((files: File[]) => handleFileAdd(files, 'vehicle'), []);
-  const onVehicleFileRemove = useCallback((i: number) => handleFileRemove(i, 'vehicle'), []);
-  const onProductFileAdd = useCallback((files: File[]) => handleFileAdd(files, 'product'), []);
-  const onProductFileRemove = useCallback((i: number) => handleFileRemove(i, 'product'), []);
-  const onInvoiceFileAdd = useCallback((files: File[]) => handleFileAdd(files, 'invoice'), []);
-  const onInvoiceFileRemove = useCallback((i: number) => handleFileRemove(i, 'invoice'), []);
-  const onAdditionalInfoToggle = useCallback(() => setAdditionalInfoOpen(o => !o), []);
-  const onVehicleSectionToggle = useCallback(() => setVehicleSectionOpen(o => !o), []);
-  const onProductSectionToggle = useCallback(() => setProductSectionOpen(o => !o), []);
-  const onInvoiceSectionToggle = useCallback(() => setInvoiceSectionOpen(o => !o), []);
-  const onEditOrder = useCallback(() => setIsEditMode(true), []);
-  const onDeleteClick = useCallback(() => { setIsMoreActionsOpen(false); setIsConfirmDeleteDialogOpen(true); }, []);
 
   const handleDeleteUploadedFile = useCallback(async (fileId: string, stage: 'product' | 'vehicle' | 'invoice') => {
     if (!currentUserProfile || !currentOrder) {
@@ -833,7 +591,6 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       return;
     }
 
-    // Permission checks
     if (stage === 'product' && !canEditSalesSpecificFields(currentUserProfile.role)) {
       onShowMessage({ type: 'error', text: 'No permission to delete Product Files.' });
       return;
@@ -847,35 +604,11 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       return;
     }
 
-
     onShowMessage({ type: 'info', text: 'Deleting file...' });
 
     try {
       await apiService.deleteFile(fileId);
-
-      // Refresh order data after deletion
-      const freshOrderData = await apiService.fetchOrder(currentOrder.deoNo);
-
-      const freshOrder = Array.isArray(freshOrderData)
-        ? freshOrderData.find((o: Order) => o.deoNo === currentOrder.deoNo)
-        : freshOrderData;
-
-      if (freshOrder) {
-        const normalizedFreshOrder: Order = {
-          ...freshOrder,
-          details: {
-            ...freshOrder.details,
-            productDriveIds: freshOrder.details?.productDriveIds || [],
-            vehicleDriveIds: freshOrder.details?.vehicleDriveIds || [],
-            invoiceDriveId: freshOrder.details?.invoiceDriveId || [],
-          },
-        };
-
-        // Update local state with fresh data
-        setCurrentOrder(normalizedFreshOrder);
-      }
-
-      //onOrderUpdated();
+      await refreshCurrentOrderFromServer(currentOrder.deoNo);
       onShowMessage({ type: 'success', text: 'File deleted successfully!' });
     } catch (e: any) {
       console.error(`File deletion failed:`, e);
@@ -884,32 +617,39 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
         : `Delete failed: ${e.message}`;
       onShowMessage({ type: 'error', text: errorMessage });
     }
-  }, [currentUserProfile, currentOrder, onShowMessage, apiService]);
+  }, [currentUserProfile, currentOrder, onShowMessage, apiService, refreshCurrentOrderFromServer]);
 
-  // ============= STATUS HANDLERS =============
+  // ------------------------------------------------------------
+  // Order actions
+  // ------------------------------------------------------------
   const handleUpdateOrderStatus = useCallback(async (newStatus: string) => {
     if (!currentUserProfile || !currentOrder) {
       onShowMessage({ type: 'error', text: 'Please log in to update status.' });
       return;
     }
 
-    // Validation checks
     if (currentOrder.status === 'Completed' || currentOrder.status === 'Cancelled') {
       onShowMessage({ type: 'error', text: `Cannot change status from '${currentOrder.status}'.` });
       return;
     }
 
     if (newStatus === 'Dispatched and Invoiced') {
-      if (!currentOrder.details?.vehicleNo || currentOrder.details.vehicleNo.trim() === '' ||
-        !currentOrder.details?.vehicleDriveIds || currentOrder.details.vehicleDriveIds.length === 0) {
+      const hasVehicle =
+        currentOrder.details?.vehicleNo && currentOrder.details.vehicleNo.trim().length > 0;
+      const hasVehicleDocs =
+        currentOrder.details?.vehicleDriveIds && currentOrder.details.vehicleDriveIds.length > 0;
+      if (!hasVehicle || !hasVehicleDocs) {
         onShowMessage({ type: 'error', text: 'Vehicle No. and Vehicle File required.' });
         return;
       }
     }
 
     if (newStatus === 'Completed') {
-      if (!currentOrder.details?.invoiceNo || currentOrder.details.invoiceNo.trim() === '' ||
-        !currentOrder.details?.invoiceDriveId || currentOrder.details.invoiceDriveId.length === 0) {
+      const hasInvoice =
+        currentOrder.details?.invoiceNo && currentOrder.details.invoiceNo.trim().length > 0;
+      const hasInvoiceDocs =
+        currentOrder.details?.invoiceDriveId && currentOrder.details.invoiceDriveId.length > 0;
+      if (!hasInvoice || !hasInvoiceDocs) {
         onShowMessage({ type: 'error', text: 'Invoice No. and Invoice File required.' });
         return;
       }
@@ -917,7 +657,6 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
         onShowMessage({ type: 'error', text: 'Invoice Issue Date is required before marking the order Completed.' });
         return;
       }
-      // Restrict to today and the previous day (local calendar day).
       const { min, max } = getInvoiceIssueDateBounds();
       const issueDate = toLocalISODate(currentOrder.details.invoiceIssueDate);
       if (issueDate < min || issueDate > max) {
@@ -961,32 +700,11 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     }
   }, [currentUserProfile, currentOrder, onShowMessage, onOrderUpdated, onClose, apiService, canTransitionToGeneral]);
 
-  // Stable status-action wrappers for the footer (keep memo isolation).
   const onApprove = useCallback(() => handleUpdateOrderStatus('Approved for Production'), [handleUpdateOrderStatus]);
   const onReadyForDispatch = useCallback(() => handleUpdateOrderStatus('Ready for Dispatch'), [handleUpdateOrderStatus]);
   const onDispatchedInvoiced = useCallback(() => handleUpdateOrderStatus('Dispatched and Invoiced'), [handleUpdateOrderStatus]);
   const onComplete = useCallback(() => handleUpdateOrderStatus('Completed'), [handleUpdateOrderStatus]);
   const onCancelOrder = useCallback(() => handleUpdateOrderStatus('Cancelled'), [handleUpdateOrderStatus]);
-
-  // ============= PDF EXPORT HANDLERS ============
-  const handleExportPdf = useCallback(() => {
-    if (!currentOrder || !currentUserProfile) return;
-    const role = currentUserProfile.role;
-    const superAdminConfig = role === 'super-admin' ? pdfFieldConfig : undefined;
-    const fieldVisibility = getEffectiveFieldVisibility(role, superAdminConfig);
-    const generatedBy = currentUserProfile.name || currentUserProfile.email;
-    openOrderPdfInNewTab(currentOrder, fieldVisibility, generatedBy);
-  }, [currentOrder, currentUserProfile, pdfFieldConfig]);
-
-  const handlePdfConfigSaved = useCallback((newConfig: PdfFieldVisibilityMap) => {
-    setPdfFieldConfig(newConfig);
-  }, []);
-
-  // ============= OTHER HANDLERS =============
-  const handleCancelEdit = () => {
-    resetPendingChanges();
-    setIsEditMode(false);
-  };
 
   const handleMarkAsPaid = async () => {
     if (!currentUserProfile || !currentOrder) return;
@@ -995,7 +713,6 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       onShowMessage({ type: 'warning', text: "Order is not 'New Customer - Unpaid'." });
       return;
     }
-
     if (!canMarkAsPaid(currentUserProfile.role)) {
       onShowMessage({ type: 'error', text: 'Only Super Admin can mark as paid.' });
       return;
@@ -1029,7 +746,6 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       onShowMessage({ type: 'error', text: 'Cannot create part delivery for unpaid customers.' });
       return;
     }
-
     if (!canCreatePartDelivery(currentUserProfile.role)) {
       onShowMessage({ type: 'error', text: 'Only Operations or Super Admin can create part delivery.' });
       return;
@@ -1065,7 +781,6 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       };
 
       const createdPartOrder = await apiService.addOrder(newOrder);
-
       const historyEntry: EditHistoryEntry = {
         timestamp: Date.now(),
         editorName: currentUserProfile.name || currentUserProfile.email,
@@ -1096,9 +811,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     onShowMessage({ type: 'warning', text: 'Order deletion is not yet implemented.' });
 
     try {
-      // await apiService.deleteOrder(currentOrder.deoNo, currentUserProfile.accessToken);
       setIsConfirmDeleteDialogOpen(false);
-      // onShowMessage({ type: 'success', text: 'Order deleted!' });
     } catch (e: any) {
       console.error('Delete failed:', e);
       onShowMessage({ type: 'error', text: 'Failed to delete order.' });
@@ -1107,58 +820,251 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     }
   };
 
-  // Handle upload complete - refetch task data
+  // ------------------------------------------------------------
+  // Save flow
+  // ------------------------------------------------------------
+  const buildChangeDescription = (original: Order, changes: Partial<Order>): string => {
+    const descriptions: string[] = [];
+
+    if (changes.client && changes.client !== original.client) descriptions.push(`Client to '${changes.client}'`);
+    if (changes.contactNo && changes.contactNo !== original.contactNo) descriptions.push(`Contact to '${changes.contactNo}'`);
+    if (changes.customerPaymentStatus && changes.customerPaymentStatus !== original.customerPaymentStatus) {
+      descriptions.push(`Payment status to '${changes.customerPaymentStatus}'`);
+    }
+    if (changes.products && changes.products !== original.products) descriptions.push('Product details');
+    if (changes.partDelivery !== undefined && changes.partDelivery !== original.partDelivery) {
+      descriptions.push(`Part delivery: ${changes.partDelivery ? 'Yes' : 'No'}`);
+    }
+    if (changes.isHighPriority !== undefined && changes.isHighPriority !== original.isHighPriority) {
+      descriptions.push(`High priority: ${changes.isHighPriority ? 'Yes' : 'No'}`);
+    }
+    if (changes.details?.invoiceDetails && changes.details.invoiceDetails !== original.details?.invoiceDetails) {
+      descriptions.push('Invoice details');
+    }
+    if (changes.details?.vehicleNo && changes.details.vehicleNo !== original.details?.vehicleNo) {
+      descriptions.push(`Vehicle No. to '${changes.details.vehicleNo}'`);
+    }
+    if (changes.details?.invoiceNo && changes.details.invoiceNo !== original.details?.invoiceNo) {
+      descriptions.push(`Invoice No. to '${changes.details.invoiceNo}'`);
+    }
+    if (changes.details?.invoiceIssueDate && changes.details.invoiceIssueDate !== original.details?.invoiceIssueDate) {
+      descriptions.push(`Invoice issue date to '${changes.details.invoiceIssueDate}'`);
+    }
+
+    return descriptions.length > 0 ? `Updated: ${descriptions.join(', ')}` : 'Minor updates';
+  };
+
+  const buildUpdatePayload = (changes: Partial<Order>): Partial<Order> => {
+    const payload: Partial<Order> = {};
+
+    if (changes.client) payload.client = changes.client;
+    if (changes.contactNo) payload.contactNo = changes.contactNo;
+    if (changes.customerPaymentStatus) payload.customerPaymentStatus = changes.customerPaymentStatus;
+    if (changes.products) payload.products = changes.products;
+    if (changes.status) payload.status = changes.status;
+    if (changes.isHighPriority !== undefined) payload.isHighPriority = changes.isHighPriority;
+    if (changes.partDelivery !== undefined) payload.partDelivery = changes.partDelivery;
+    if (changes.organizationContact) payload.organizationContact = changes.organizationContact;
+
+    if (changes.details && Object.keys(changes.details).length > 0) {
+      payload.details = {};
+
+      if (changes.details.orderDate) payload.details.orderDate = changes.details.orderDate;
+      if (changes.details.invoiceDetails !== undefined) payload.details.invoiceDetails = changes.details.invoiceDetails;
+      if (changes.details.vehicleNo !== undefined) payload.details.vehicleNo = changes.details.vehicleNo;
+      if (changes.details.invoiceNo !== undefined) payload.details.invoiceNo = changes.details.invoiceNo;
+      if (changes.details.invoiceIssueDate !== undefined) payload.details.invoiceIssueDate = changes.details.invoiceIssueDate;
+      if (changes.details.siteDeliveryInfo !== undefined) payload.details.siteDeliveryInfo = changes.details.siteDeliveryInfo;
+      if (changes.details.measurementKata) payload.details.measurementKata = changes.details.measurementKata;
+      if (changes.details.transportProvider) payload.details.transportProvider = changes.details.transportProvider;
+      if (changes.details.transportProviderName !== undefined) payload.details.transportProviderName = changes.details.transportProviderName;
+    }
+
+    return payload;
+  };
+
+  const handleSaveAllChanges = useCallback(async () => {
+    if (!currentUserProfile || !currentOrder) {
+      onShowMessage({ type: 'error', text: 'Please log in to save changes.' });
+      return;
+    }
+
+    if (pendingChanges.textFields.contactNo) {
+      const contact = pendingChanges.textFields.contactNo.trim();
+      if (contact.length !== 10 || !/^\d{10}$/.test(contact)) {
+        onShowMessage({ type: 'error', text: 'Contact No. must be exactly 10 digits.' });
+        return;
+      }
+    }
+
+    setIsSaving(true);
+    onShowMessage({ type: 'info', text: 'Saving changes...' });
+    console.time('saveAllChanges');
+
+    try {
+      if (Object.keys(pendingChanges.textFields).length > 0) {
+        const changes = buildChangeDescription(currentOrder, pendingChanges.textFields);
+        const historyEntry: EditHistoryEntry = {
+          timestamp: Date.now(),
+          editorName: currentUserProfile.name || currentUserProfile.email,
+          description: changes,
+        };
+
+        const payload = buildUpdatePayload(pendingChanges.textFields);
+        await apiService.updateOrder(currentOrder.deoNo, payload, historyEntry);
+      }
+
+      const fileUploads: Array<{ stage: 'product' | 'vehicle' | 'invoice' | 'productVoiceNote' | 'invoiceVoiceNote'; files: File[] }> = [];
+
+      if (pendingChanges.productFiles.length > 0) fileUploads.push({ stage: 'product', files: pendingChanges.productFiles });
+      if (pendingChanges.vehicleFiles.length > 0) fileUploads.push({ stage: 'vehicle', files: pendingChanges.vehicleFiles });
+      if (pendingChanges.invoiceFiles.length > 0) fileUploads.push({ stage: 'invoice', files: pendingChanges.invoiceFiles });
+      if (pendingChanges.productAudioFiles.length > 0) fileUploads.push({ stage: 'productVoiceNote', files: pendingChanges.productAudioFiles });
+      if (pendingChanges.invoiceAudioFiles.length > 0) fileUploads.push({ stage: 'invoiceVoiceNote', files: pendingChanges.invoiceAudioFiles });
+
+      for (const upload of fileUploads) {
+        try {
+          onShowMessage({
+            type: 'info',
+            text: `Processing ${upload.files.length} file(s) for ${upload.stage}...`,
+          });
+
+          if (upload.stage === 'productVoiceNote' || upload.stage === 'invoiceVoiceNote') {
+            await fileApi.uploadFiles(currentOrder.deoNo, upload.files, upload.stage, 'order');
+            onShowMessage({
+              type: 'info',
+              text: `Uploaded ${upload.files.length} audio file(s) for ${upload.stage}`,
+            });
+          } else {
+            const { pdfBytes, filename } = await processFilesToPdf(upload.files, upload.stage);
+            const uploadObject = await pdfBytesToFile(pdfBytes, filename);
+            onShowMessage({
+              type: 'info',
+              text: `Created ${filename} (${formatFileSize(pdfBytes.length)})`,
+            });
+
+            await apiService.uploadFile(currentOrder.deoNo, upload.stage, [uploadObject]);
+          }
+        } catch (error) {
+          console.error(`Failed to process ${upload.stage} files:`, error);
+          onShowMessage({
+            type: 'error',
+            text: `Failed to process ${upload.stage} files: ${error}`,
+          });
+          throw error;
+        }
+      }
+
+      await refreshCurrentOrderFromServer(currentOrder.deoNo);
+
+      resetPendingChanges();
+      setIsEditMode(false);
+
+      const totalFiles = fileUploads.reduce((sum, u) => sum + u.files.length, 0);
+      const message = totalFiles > 0
+        ? `Order updated successfully with ${totalFiles} file(s)!`
+        : 'Order updated successfully!';
+
+      onShowMessage({ type: 'success', text: message });
+    } catch (e: any) {
+      console.error('Save all changes failed:', e);
+      const errorMessage = process.env.NODE_ENV === 'production'
+        ? 'Failed to save changes. Please try again.'
+        : `Save failed: ${e.message}`;
+      onShowMessage({ type: 'error', text: errorMessage });
+    } finally {
+      setIsSaving(false);
+      console.timeEnd('saveAllChanges');
+    }
+  }, [currentOrder, pendingChanges, currentUserProfile, onShowMessage, onOrderUpdated, apiService, fileApi, refreshCurrentOrderFromServer]);
+
+  // ------------------------------------------------------------
+  // PDF
+  // ------------------------------------------------------------
+  const handleExportPdf = useCallback(() => {
+    if (!currentOrder || !currentUserProfile) return;
+    const role = currentUserProfile.role;
+    const superAdminConfig = role === 'super-admin' ? pdfFieldConfig : undefined;
+    const fieldVisibility = getEffectiveFieldVisibility(role, superAdminConfig);
+    const generatedBy = currentUserProfile.name || currentUserProfile.email;
+    openOrderPdfInNewTab(currentOrder, fieldVisibility, generatedBy);
+  }, [currentOrder, currentUserProfile, pdfFieldConfig]);
+
+  const handlePdfConfigSaved = useCallback((newConfig: PdfFieldVisibilityMap) => {
+    setPdfFieldConfig(newConfig);
+  }, []);
+
+  // ------------------------------------------------------------
+  // Stable callback wrappers
+  // ------------------------------------------------------------
+  const onTextChange = useCallback(handleTextChange, []);
+  const onPaymentStatusChange = useCallback(handlePaymentStatusChange, []);
+  const onPartDeliveryChange = useCallback(handlePartDeliveryChange, []);
+  const onHighPriorityChange = useCallback(handleHighPriorityChange, []);
+  const onStatusSelectChange = useCallback(handleStatusSelectChange, []);
+  const onWeightScaleChange = useCallback(handleWeightScaleChange, []);
+  const onTransportProviderChange = useCallback(handleTransportProviderChange, []);
+  const onVehicleFileAdd = useCallback((files: File[]) => handleFileAdd(files, 'vehicle'), []);
+  const onVehicleFileRemove = useCallback((i: number) => handleFileRemove(i, 'vehicle'), []);
+  const onProductFileAdd = useCallback((files: File[]) => handleFileAdd(files, 'product'), []);
+  const onProductFileRemove = useCallback((i: number) => handleFileRemove(i, 'product'), []);
+  const onInvoiceFileAdd = useCallback((files: File[]) => handleFileAdd(files, 'invoice'), []);
+  const onInvoiceFileRemove = useCallback((i: number) => handleFileRemove(i, 'invoice'), []);
+  const onAdditionalInfoToggle = useCallback(() => setAdditionalInfoOpen((o) => !o), []);
+  const onVehicleSectionToggle = useCallback(() => setVehicleSectionOpen((o) => !o), []);
+  const onProductSectionToggle = useCallback(() => setProductSectionOpen((o) => !o), []);
+  const onInvoiceSectionToggle = useCallback(() => setInvoiceSectionOpen((o) => !o), []);
+  const onEditOrder = useCallback(() => setIsEditMode(true), []);
+  const onDeleteClick = useCallback(() => {
+    setIsMoreActionsOpen(false);
+    setIsConfirmDeleteDialogOpen(true);
+  }, []);
   const handleUploadComplete = useCallback(async () => {
     await onOrderUpdated();
   }, [onOrderUpdated]);
 
-  if (!order || !currentOrder) return null;
-  const isPaymentPending =
-    displayOrder?.customerPaymentStatus === "new-unpaid" &&
-    displayOrder?.status === "Ready for Dispatch";
+  const handleProductAudioStaged = useCallback((files: File[]) => handleAudioFileAdd(files, 'product'), []);
+  const handleProductAudioRemoved = useCallback((index: number) => handleAudioFileRemove(index, 'product'), []);
+  const handleInvoiceAudioStaged = useCallback((files: File[]) => handleAudioFileAdd(files, 'invoice'), []);
+  const handleInvoiceAudioRemoved = useCallback((index: number) => handleAudioFileRemove(index, 'invoice'), []);
 
+  const handleCancelEdit = () => {
+    resetPendingChanges();
+    setIsEditMode(false);
+  };
 
+  // ------------------------------------------------------------
+  // Guard / early returns
+  // ------------------------------------------------------------
+  if (!order || !currentOrder || !currentUserProfile) return null;
 
-
-
-  if (!currentUserProfile) {
-    return null; // Loading screen is handled by LoadingContext
-  }
-
-  // 1. Logic for Operations role and specific payment status
-  const isOpsUnpaidWarning =
-    isOperations(currentUserProfile?.role ?? null) &&
-    displayOrder?.customerPaymentStatus === 'new-unpaid';
-
-  // 2. Determine background colour based on role and status
-  const dialogBackgroundClass = isOpsUnpaidWarning
-    ? 'bg-gradient-to-br from-red-100 via-red-50 to-red-100 dark:from-red-950 dark:via-gray-800 dark:to-red-950 shadow-[inset_0_0_50px_rgba(220,38,38,0.2)]'
-    : (displayOrder ? (paymentStatusGradients[displayOrder.customerPaymentStatus] || 'bg-white dark:bg-gray-800') : 'bg-white dark:bg-gray-800');
-
-  // ============= RENDER =============
+  // ============================================================
+  // RENDER
+  // ============================================================
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => {
         if (!open) {
-          onClose();         // your close handler
-          onOrderUpdated(); // your custom function
+          onClose();
+          onOrderUpdated();
         }
       }}>
         <DialogContent
           className={`sm:max-w-[800px] md:max-w-[1400px] p-2 md:p-4 rounded-xl shadow-2xl overflow-y-auto max-h-[80vh] md:max-h-[90vh] z-[9000] dialog-custom-scrollbar ${dialogBackgroundClass}`}
         >
-
-          {/* 3. Flashing "PAYMENT NOT COMPLETED" Warning */}
           {isOpsUnpaidWarning && (
             <div className="sticky top-0 z-[9010] w-full mb-4 px-2">
               <div className="bg-red-600 text-white py-4 rounded-lg text-center animate-pulse shadow-2xl border-4 border-red-400">
                 <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase">
                   PAYMENT NOT COMPLETED
                 </h2>
-                <p className="text-sm font-bold opacity-90 mt-1">OPERATIONS ALERT: CHECK PAYMENT STATUS BEFORE PROCEEDING</p>
+                <p className="text-sm font-bold opacity-90 mt-1">
+                  OPERATIONS ALERT: CHECK PAYMENT STATUS BEFORE PROCEEDING
+                </p>
               </div>
             </div>
           )}
+
           <DialogHeader>
             <div className="flex items-start justify-between gap-2">
               <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3 flex-wrap">
@@ -1177,7 +1083,6 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                 )}
               </DialogTitle>
 
-              {/* ── PDF Export Actions ─────────────────────────── */}
               {canExportPdf(currentUserProfile.role) && !isEditMode && (
                 <div className="flex items-center gap-1.5 shrink-0 pt-0.5 mr-5">
                   {canConfigurePdf(currentUserProfile.role) && (
@@ -1208,14 +1113,11 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
             </DialogDescription>
           </DialogHeader>
 
-          {/* MAIN CONTENT - Two Column Layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-            {/* LEFT COLUMN */}
             <div className="space-y-6">
-              {/* Client & Status Card */}
               <ClientStatusCard
                 isEditMode={isEditMode}
-                role={currentUserProfile?.role ?? null}
+                role={role}
                 status={displayOrder?.status}
                 customerPaymentStatus={displayOrder?.customerPaymentStatus}
                 client={displayOrder?.client || ''}
@@ -1235,14 +1137,19 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                 shippingAddresses={shippingAddressOptions}
                 selectedShippingAddress={selectedShippingAddress}
                 onShippingAddressChange={handleShippingAddressChange}
+                canEditClient={canEditClient}
+                canEditContact={canEditContact}
+                canEditPaymentStatus={canEditPaymentStatus}
+                canEditPartDelivery={canEditPartDelivery}
+                canEditHighPriority={canEditHighPriority}
+                canEditStatusSelect={canEditStatusSelect}
               />
 
-              {/* Delivery & Vehicle Details Card - CLEAN WHITE REDESIGN */}
               <DeliveryVehicleCard
                 isEditMode={isEditMode}
-                role={currentUserProfile?.role ?? null}
-                isOperationsRole={isOperations(currentUserProfile?.role ?? null)}
-                canEditSite={canEditSiteInfo(currentUserProfile)}
+                role={role}
+                isOperationsRole={isOperations(role)}
+                canEditSite={canEditSiteInfoPerm}
                 measurementKata={displayOrder?.details?.measurementKata}
                 transportProvider={displayOrder?.details?.transportProvider}
                 transportProviderName={displayOrder?.details?.transportProviderName}
@@ -1259,17 +1166,18 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                 onVehicleFileAdd={onVehicleFileAdd}
                 onVehicleFileRemove={onVehicleFileRemove}
                 onDeleteUploadedFile={handleDeleteUploadedFile}
-                isSaving={isSaving}
+                canEditMeasurementKata={canEditMeasurementKata}
+                canEditTransportProvider={canEditTransportProvider}
+                canEditVehicleNo={canEditVehicleNo}
+                canEditSiteInfo={canEditSiteInfoPerm}
+                canEditVehicleFiles={canEditVehicleFiles}
               />
-
             </div>
 
-            {/* RIGHT COLUMN */}
             <div className="space-y-6">
-              {/* Product Details Card */}
               <ProductDetailsCard
                 isEditMode={isEditMode}
-                role={currentUserProfile?.role ?? null}
+                role={role}
                 currentUserProfile={currentUserProfile}
                 products={displayOrder?.products || ''}
                 deoNo={currentOrder.deoNo}
@@ -1291,12 +1199,14 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                 transportProviderName={displayOrder?.details?.transportProviderName}
                 measurementKata={displayOrder?.details?.measurementKata}
                 customerPaymentStatus={displayOrder?.customerPaymentStatus}
+                canEditProducts={canEditProducts}
+                canEditProductFiles={canEditProductFiles}
               />
 
-              {!isOperations(currentUserProfile?.role ?? null) && (
+              {showInvoiceCard && (
                 <InvoiceDetailsCard
                   isEditMode={isEditMode}
-                  role={currentUserProfile?.role ?? null}
+                  role={role}
                   status={displayOrder?.status}
                   deoNo={currentOrder.deoNo}
                   currentUserProfile={currentUserProfile}
@@ -1316,14 +1226,15 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                   onInvoiceAudioRemoved={handleInvoiceAudioRemoved}
                   onDeleteUploadedFile={handleDeleteUploadedFile}
                   onUploadComplete={handleUploadComplete}
+                  canEditInvoiceDetails={canEditInvoiceDetails}
+                  canEditInvoiceNo={canEditInvoiceNo}
+                  canEditInvoiceIssueDate={canEditInvoiceIssueDate}
+                  canEditInvoiceFiles={canEditInvoiceFiles}
                 />
               )}
             </div>
-
-
           </div>
 
-          {/* FOOTER - Action Buttons */}
           <OrderActionsFooter
             isEditMode={isEditMode}
             isSaving={isSaving}
@@ -1355,10 +1266,8 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
             deoNo={currentOrder.deoNo}
             currentUserProfile={currentUserProfile}
           />
-
         </DialogContent>
 
-        {/* Delete Confirmation Dialog */}
         <Dialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
           <DialogContent className="sm:max-w-[425px] p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg z-[9003]">
             <DialogHeader>
@@ -1376,11 +1285,7 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="mt-6 gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setIsConfirmDeleteDialogOpen(false)}
-                disabled={isDeletingOrder}
-              >
+              <Button variant="outline" onClick={() => setIsConfirmDeleteDialogOpen(false)} disabled={isDeletingOrder}>
                 Cancel
               </Button>
               <Button
@@ -1398,7 +1303,6 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
         </Dialog>
       </Dialog>
 
-      {/* PDF Field Config Modal — super-admin only */}
       {canConfigurePdf(currentUserProfile.role) && (
         <PdfConfigModal
           isOpen={isPdfConfigOpen}
@@ -1413,7 +1317,6 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
         />
       )}
 
-      {/* Customer (billing / shipping / contact) edit — restricted to contacts only */}
       <CustomerDialog
         isOpen={customerDialogOpen}
         mode="edit"

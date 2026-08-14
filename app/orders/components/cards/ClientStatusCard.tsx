@@ -12,12 +12,12 @@ import {
   DollarSign, History, ChevronDown, ChevronUp, Edit2, MapPin,
 } from 'lucide-react';
 import {
-  canEditSalesSpecificFields, canEditOperationsSpecificFields, isOperations,
-  isSuperAdmin,
+  isOperations,
 } from '../../permissions';
 import { PAYMENT_STATUS_COLORS, STATUS_COLORS } from '../../constants';
 import { formatContactNumberForWhatsApp } from '../../fileUtils';
 import { ClientStatusCardProps } from './cardTypes';
+import { PermissionGate } from '@/components/PermissionGate';
 
 const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
   isEditMode, role, status, customerPaymentStatus, client, contactNo,
@@ -31,7 +31,20 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
   onPartDeliveryChange,
   onHighPriorityChange,
   onPaymentStatusChange,
+  canEditClient,
+  canEditContact,
+  canEditPaymentStatus,
+  canEditPartDelivery,
+  canEditHighPriority,
+  canEditStatusSelect,
 }) => {
+  const showEditClient = isEditMode && canEditClient;
+  const showEditContact = isEditMode && canEditContact;
+  const showEditPaymentStatus = isEditMode && canEditPaymentStatus;
+  const showEditPartDelivery = isEditMode && canEditPartDelivery;
+  const showEditHighPriority = isEditMode && canEditHighPriority;
+  const showEditStatusSelect = isEditMode && canEditStatusSelect;
+
   return (
     <div className="bg-white dark:bg-gray-900 p-4 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 space-y-3">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2">
@@ -45,19 +58,22 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
             <Label htmlFor="client" className="font-medium flex items-center gap-1 text-sm">
               <UserIcon className="w-4 h-4 text-gray-500" /> Client:
             </Label>
-            {isEditMode && canEditSalesSpecificFields(role) && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onEditCustomer}
-                className="h-6 px-2 rounded-md text-[10px] font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-              >
-                <Edit2 className="w-3 h-3 mr-0.5" /> Edit
-              </Button>
-            )}
+            {/* Edit customer button — permission gated */}
+            <PermissionGate module="orders" field="client-edit">
+              {showEditClient && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={onEditCustomer}
+                  className="h-6 px-2 rounded-md text-[10px] font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                >
+                  <Edit2 className="w-3 h-3 mr-0.5" /> Edit
+                </Button>
+              )}
+            </PermissionGate>
           </div>
-          {isEditMode && canEditSalesSpecificFields(role) ? (
+          {showEditClient ? (
             <Input id="client" value={client || ''} onChange={onTextChange} className="w-full h-9" />
           ) : (
             <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 text-sm">
@@ -66,32 +82,34 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
           )}
         </div>
 
-        {/* Shipping Address — directly below Client, shown in edit mode for any role */}
-        {isEditMode && shippingAddresses.length > 0 && (
-          <div className="space-y-1">
-            <Label className="font-medium flex items-center gap-1 text-sm">
-              <MapPin className="w-4 h-4 text-gray-500" /> Shipping Address:
-            </Label>
-            <Select value={selectedShippingAddress} onValueChange={(v) => onShippingAddressChange?.(v)}>
-              <SelectTrigger className="w-full h-9">
-                <SelectValue placeholder="Select shipping address" />
-              </SelectTrigger>
-              <SelectContent className="z-[9050]">
-                <SelectItem value="Ask for client">Ask for client</SelectItem>
-                {shippingAddresses.map((addr, i) => (
-                  <SelectItem key={i} value={addr}>{addr}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+        {/* Shipping Address — permission gated */}
+        <PermissionGate module="orders" field="shipping-address">
+          {isEditMode && shippingAddresses.length > 0 && (
+            <div className="space-y-1">
+              <Label className="font-medium flex items-center gap-1 text-sm">
+                <MapPin className="w-4 h-4 text-gray-500" /> Shipping Address:
+              </Label>
+              <Select value={selectedShippingAddress} onValueChange={(v) => onShippingAddressChange?.(v)}>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue placeholder="Select shipping address" />
+                </SelectTrigger>
+                <SelectContent className="z-[9050]">
+                  <SelectItem value="Ask for client">Ask for client</SelectItem>
+                  {shippingAddresses.map((addr, i) => (
+                    <SelectItem key={i} value={addr}>{addr}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </PermissionGate>
 
         {/* Contact */}
         <div className="space-y-1">
           <Label htmlFor="contactNo" className="font-medium flex items-center gap-1 text-sm">
             <Phone className="w-4 h-4 text-gray-500" /> Contact:
           </Label>
-          {isEditMode && canEditSalesSpecificFields(role) ? (
+          {showEditContact ? (
             <>
               <Input
                 id="contactNo"
@@ -131,46 +149,46 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
           )}
         </div>
 
-        {/* Org Contact */}
-        <div className="space-y-1">
-          <Label className="font-medium flex items-center gap-1 text-sm">
-            <UserIcon className="w-4 h-4 text-gray-500" /> Org. Contact:
-          </Label>
-          <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 text-sm">
-            {organizationContact || 'N/A'}
-          </span>
-        </div>
-
-        {/* Part Delivery */}
-        <div className="space-y-1">
-          <Label htmlFor="partDelivery" className="font-medium flex items-center gap-1 text-sm">
-            <Package className="w-4 h-4 text-gray-500" /> Part Delivery:
-          </Label>
-          {isEditMode && canEditOperationsSpecificFields(role) ? (
-            <div className="flex items-center space-x-2 h-[36px]">
-              <Checkbox
-                id="partDelivery"
-                checked={partDelivery || false}
-                onCheckedChange={onPartDeliveryChange}
-              />
-              <Label htmlFor="partDelivery" className="font-normal text-sm">Enable Part Delivery</Label>
-            </div>
-          ) : (
-            <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 h-[36px] flex items-center text-sm">
-              {partDelivery ? 'Yes' : 'No'}
+        {/* Org Contact — permission gated */}
+        <PermissionGate module="orders" field="org-contact">
+          <div className="space-y-1">
+            <Label className="font-medium flex items-center gap-1 text-sm">
+              <UserIcon className="w-4 h-4 text-gray-500" /> Org. Contact:
+            </Label>
+            <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 text-sm">
+              {organizationContact || 'N/A'}
             </span>
-          )}
-        </div>
+          </div>
+        </PermissionGate>
 
+        {/* Part Delivery — permission gated */}
+        <PermissionGate module="orders" field="part-delivery">
+          <div className="space-y-1">
+            <Label htmlFor="partDelivery" className="font-medium flex items-center gap-1 text-sm">
+              <Package className="w-4 h-4 text-gray-500" /> Part Delivery:
+            </Label>
+            {showEditPartDelivery ? (
+              <div className="flex items-center space-x-2 h-[36px]">
+                <Checkbox
+                  id="partDelivery"
+                  checked={partDelivery || false}
+                  onCheckedChange={onPartDeliveryChange}
+                />
+                <Label htmlFor="partDelivery" className="font-normal text-sm">Enable Part Delivery</Label>
+              </div>
+            ) : (
+              <span className="text-gray-800 dark:text-gray-200 block border p-2 rounded-md bg-gray-50 dark:bg-gray-700 h-[36px] flex items-center text-sm">
+                {partDelivery ? 'Yes' : 'No'}
+              </span>
+            )}
+          </div>
+        </PermissionGate>
       </div>
 
       {/* Collapsible section for non-ops */}
       {isOperations(role) ? (
         <div className="pt-3 border-t dark:border-gray-700">
-          <div
-            className="flex justify-between items-center cursor-pointer"
-            onClick={onAdditionalInfoToggle}
-          >
+          <div className="flex justify-between items-center cursor-pointer" onClick={onAdditionalInfoToggle}>
             <h4 className="font-semibold text-gray-800 dark:text-white text-sm">Additional Info</h4>
             {isAdditionalInfoOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </div>
@@ -188,7 +206,7 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
                 <Label htmlFor="isHighPriority" className="font-medium flex items-center gap-1 text-sm">
                   <Zap className="w-4 h-4 text-gray-500" /> High Priority:
                 </Label>
-                {isEditMode && canEditSalesSpecificFields(role) ? (
+                {showEditHighPriority ? (
                   <div className="flex items-center space-x-2 h-[36px]">
                     <Switch
                       id="isHighPriority"
@@ -222,7 +240,7 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
             <Label htmlFor="isHighPriority" className="font-medium flex items-center gap-1 text-sm">
               <Zap className="w-4 h-4 text-gray-500" /> High Priority:
             </Label>
-            {isEditMode && canEditSalesSpecificFields(role) ? (
+            {showEditHighPriority ? (
               <div className="flex items-center space-x-2 h-[36px]">
                 <Switch
                   id="isHighPriority"
@@ -248,7 +266,7 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
           <Label htmlFor="customerPaymentStatus" className="font-medium flex items-center gap-1 text-sm">
             <DollarSign className="w-4 h-4 text-gray-500" /> Payment:
           </Label>
-          {isEditMode && canEditSalesSpecificFields(role) ? (
+          {showEditPaymentStatus ? (
             <Select onValueChange={onPaymentStatusChange} value={customerPaymentStatus || ''}>
               <SelectTrigger id="customerPaymentStatus" className="w-full h-9">
                 <SelectValue />
@@ -271,7 +289,6 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
                     ? 'Credit Note'
                     : 'Credit Note'}
             </Badge>
-
           )}
         </div>
 
@@ -279,7 +296,7 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
           <Label className="font-medium flex items-center gap-1 text-sm">
             <History className="w-4 h-4 text-gray-500" /> Status:
           </Label>
-          {isEditMode && isSuperAdmin(role) ? (
+          {showEditStatusSelect ? (
             <Select onValueChange={onStatusSelectChange} value={status || ''}>
               <SelectTrigger className="w-full h-9">
                 <SelectValue placeholder="Select Status" />
