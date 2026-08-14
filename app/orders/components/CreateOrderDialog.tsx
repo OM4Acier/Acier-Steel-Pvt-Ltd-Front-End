@@ -1273,7 +1273,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                                               <SelectItem value="client" className="font-bold">
                                                 Client Arrangement
                                               </SelectItem>
-                                                <SelectItem value="Porter" className="font-bold">
+                                                <SelectItem value="porter" className="font-bold">
                                                 Porter
                                               </SelectItem>
                                               <SelectItem value="own" className="font-bold">
