@@ -47,7 +47,7 @@ export const MEASUREMENT_KATA_LABELS: Record<MeasurementKata, string> = {
 export type TransportProvider = 'client' | 'Porter' | 'own';
 export const TRANSPORT_PROVIDER_LABELS: Record<TransportProvider, string> = {
   client: 'Client Transport',
-  Porter: 'Porter',
+  porter: 'Porter',
   own: 'Own Transport',
 };
 export type OrderStatus = 
