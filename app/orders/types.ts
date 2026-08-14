@@ -44,7 +44,7 @@ export const MEASUREMENT_KATA_LABELS: Record<MeasurementKata, string> = {
   prince: 'Prince Kata',
   factory: 'Factory Kata',
 };
-export type TransportProvider = 'client' | 'Porter' | 'own';
+export type TransportProvider = 'client' | 'porter' | 'own';
 export const TRANSPORT_PROVIDER_LABELS: Record<TransportProvider, string> = {
   client: 'Client Transport',
   porter: 'Porter',
