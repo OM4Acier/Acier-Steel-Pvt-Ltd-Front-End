@@ -113,7 +113,7 @@ const OrderActionsFooter: React.FC<OrderActionsFooterProps> = ({
                 <Button
                   onClick={onDispatchedInvoiced}
                   className="flex-1 sm:flex-none bg-yellow-500 hover:bg-yellow-600 text-white disabled:opacity-50"
-                  disabled={isSaving}
+                 disabled={isSaving || isPaymentPending}
                 >
                   {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   <Truck className="w-4 h-4 mr-2" /> Dispatched & Invoiced
