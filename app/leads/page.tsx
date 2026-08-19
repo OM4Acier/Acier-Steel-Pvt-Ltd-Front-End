@@ -263,17 +263,18 @@ export default function LeadManagementPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const fetchLeads = useCallback(async () => {
+  const fetchLeads = useCallback(async (): Promise<Lead[]> => {
     setIsFetching(true);
     try {
       // apiClient handles tokens via interceptor
       const fetchedLeadsData = await leadApiService.fetchLeads();
       setLeads(fetchedLeadsData);
       toast.success('Leads data updated!');
-
+      return fetchedLeadsData;
     } catch (error: any) {
       console.error("Error fetching Leads:", error);
       toast.error(`Failed to fetch Leads: ${error.message}`);
+      return [];
     } finally {
       setIsFetching(false);
     }
@@ -355,9 +356,13 @@ export default function LeadManagementPage() {
       await leadApiService.updateLead(lead.leadId, updatedFields, newHistoryEntry);
       toast.success(`Lead ${lead.leadId} updated.`);
       // After update, re-fetch leads to ensure UI is consistent
-      await fetchLeads();
-      // If the updated lead was the selected one, clear selection or refresh its data
-      if (selectedLead?.id === lead.id) setSelectedLead(null); // This will cause the dialog to close and re-open with fresh data if clicked again
+      const refreshed = await fetchLeads();
+      // Refresh the open dialog with the latest data (e.g. newly uploaded files)
+      // instead of closing it.
+      if (selectedLead?.id === lead.id) {
+        const fresh = refreshed.find(l => l.id === lead.id);
+        if (fresh) setSelectedLead(fresh);
+      }
     } catch (error: any) {
       console.error(`Error performing action ${action} on lead ${lead.leadId}:`, error);
       toast.error(`Action failed: ${error.message}`);
@@ -636,14 +641,32 @@ export default function LeadManagementPage() {
 // --- FILE CONVERSION UTILITY ---
 const compressAndConvertFile = (file: File): Promise<{ filename: string; mimeType: string; fileBase64: string }> => {
   return new Promise((resolve, reject) => {
-    if (file.type === 'application/pdf') {
+    // Pass-through: read the raw file as base64 without any canvas processing.
+    // Used for PDFs, unsupported image types (HEIC/HEIF/TIFF), and as a safe
+    // fallback whenever canvas decoding/encoding fails — this guarantees the
+    // upload API call is ALWAYS made with valid data.
+    const passThrough = () => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = (event) => {
         const base64String = (event.target?.result as string).split(',')[1];
-        resolve({ filename: file.name, mimeType: file.type, fileBase64: base64String });
+        resolve({ filename: file.name, mimeType: file.type || 'application/octet-stream', fileBase64: base64String });
       };
       reader.onerror = (error) => reject(error);
+    };
+
+    // PDF is never decoded by canvas — send it straight through.
+    if (file.type === 'application/pdf') {
+      passThrough();
+      return;
+    }
+
+    // Only attempt canvas compression for image types the browser can both
+    // decode AND re-encode. Anything else (HEIC, HEIF, TIFF, unknown) is sent
+    // raw so the upload request still reaches the server.
+    const CANVAS_SUPPORTED = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/bmp'];
+    if (!CANVAS_SUPPORTED.includes(file.type)) {
+      passThrough();
       return;
     }
 
@@ -655,6 +678,10 @@ const compressAndConvertFile = (file: File): Promise<{ filename: string; mimeTyp
       img.onload = () => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          passThrough(); // No 2D context available — send raw
+          return;
+        }
 
         const MAX_WIDTH = 1200;
         const MAX_HEIGHT = 1200;
@@ -677,14 +704,10 @@ const compressAndConvertFile = (file: File): Promise<{ filename: string; mimeTyp
 
         canvas.width = width;
         canvas.height = height;
-        ctx?.drawImage(img, 0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
 
-        let outputMimeType = file.type;
-        const compressionQuality = JPEG_QUALITY;
-
-        if (!['image/jpeg', 'image/webp'].includes(file.type)) {
-          outputMimeType = file.type;
-        }
+        // Always re-encode as JPEG for broad backend compatibility.
+        const outputMimeType = 'image/jpeg';
 
         canvas.toBlob((blob) => {
           if (blob) {
@@ -695,11 +718,18 @@ const compressAndConvertFile = (file: File): Promise<{ filename: string; mimeTyp
               resolve({ filename: file.name, mimeType: outputMimeType, fileBase64: base64String });
             };
           } else {
-            reject(new Error('Canvas to Blob conversion failed.'));
+            // toBlob returned null (rare) — try toDataURL, then raw pass-through.
+            try {
+              const dataUrl = canvas.toDataURL(outputMimeType, JPEG_QUALITY);
+              const base64String = dataUrl.split(',')[1];
+              resolve({ filename: file.name, mimeType: outputMimeType, fileBase64: base64String });
+            } catch {
+              passThrough();
+            }
           }
-        }, outputMimeType, compressionQuality);
+        }, outputMimeType, JPEG_QUALITY);
       };
-      img.onerror = (error) => reject(error);
+      img.onerror = () => passThrough(); // Decode failed — send raw
     };
     reader.onerror = (error) => reject(error);
   });
@@ -1045,19 +1075,33 @@ const LeadDetailsDialog: React.FC<LeadDetailsDialogProps> = (props) => {
       return;
     }
 
-    if (Object.keys(updatedFields).length > 0) {
-      setIsLeadDetailsActionLoading(true);
-      try {
+    setIsLeadDetailsActionLoading(true);
+    try {
+      // 1. Upload any queued files first (if present). This guarantees the
+      //    selected attachments are sent even when the user only clicked
+      //    "Save Changes" without pressing the old separate upload button.
+      if (selectedFiles.length > 0) {
+        const formattedFiles = await Promise.all(selectedFiles.map(file => compressAndConvertFile(file)));
+        await leadApiService.uploadFile(lead.leadId, formattedFiles);
+        toast.success("Files uploaded successfully!");
+        setSelectedFiles([]);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+
+      // 2. Persist any field changes.
+      if (Object.keys(updatedFields).length > 0) {
         const newHistoryEntry: EditHistoryEntry = { timestamp: Date.now(), editorName: currentUser.name || currentUser.email, description: `Updated ${changes.join(', ')}.` };
         await onAction('update', lead, { updatedFields, newHistoryEntry: newHistoryEntry });
-      } catch (error: any) {
-        console.error("Error saving lead details:", error);
-        toast.error(`Failed to save changes: ${error.message}`);
-      } finally {
-        setIsLeadDetailsActionLoading(false);
+      } else if (selectedFiles.length === 0) {
+        // Nothing edited and no files queued — only show the no-change notice
+        // when the user truly made no modification at all.
+        toast.info("No changes were made.");
       }
-    } else {
-      toast.info("No changes were made.");
+    } catch (error: any) {
+      console.error("Error saving lead details:", error);
+      toast.error(`Failed to save: ${error.message}`);
+    } finally {
+      setIsLeadDetailsActionLoading(false);
     }
     setIsEditing(false);
   };
@@ -1112,27 +1156,6 @@ const LeadDetailsDialog: React.FC<LeadDetailsDialogProps> = (props) => {
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.remove('border-blue-500', 'bg-blue-50/20');
     if (event.dataTransfer.files) { setSelectedFiles(prev => [...prev, ...Array.from(event.dataTransfer.files)]); }
-  };
-
-  const handleUploadFiles = async () => {
-    if (!currentUser || !lead.id || selectedFiles.length === 0) {
-      toast.error("No files selected or user not authenticated.");
-      return;
-    }
-    setIsLeadDetailsUploadingFiles(true);
-    try {
-      const formattedFiles = await Promise.all(selectedFiles.map(file => compressAndConvertFile(file)));
-      await leadApiService.uploadFile(lead.leadId, formattedFiles);
-      toast.success("Files uploaded successfully!");
-      setSelectedFiles([]);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      await onAction('update', lead, { updatedFields: {}, newHistoryEntry: { timestamp: Date.now(), editorName: currentUser.name || currentUser.email, description: `Uploaded ${formattedFiles.length} new files.` } });
-    } catch (error: any) {
-      console.error("Error uploading files:", error);
-      toast.error(`Failed to upload files: ${error.message}`);
-    } finally {
-      setIsLeadDetailsUploadingFiles(false);
-    }
   };
 
   const confirmFileDeletion = (file: FileMetadata) => {
@@ -1344,9 +1367,7 @@ const LeadDetailsDialog: React.FC<LeadDetailsDialogProps> = (props) => {
                               </li>
                             ))}
                           </ul>
-                          <Button onClick={handleUploadFiles} disabled={isLeadDetailsUploadingFiles || selectedFiles.length === 0} className="w-full mt-2 text-xs h-8">
-                            {isLeadDetailsUploadingFiles ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Upload className="w-3 h-3 mr-1" />} Upload Selected Files
-                          </Button>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Files upload when you click <span className="font-medium text-gray-700 dark:text-gray-300">Save Changes</span>.</p>
                         </div>
                       )}
                       {lead.uploadedFiles && lead.uploadedFiles.length > 0 && <div className="border-t border-gray-700 pt-3" />}
