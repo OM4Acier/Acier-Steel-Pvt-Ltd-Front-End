@@ -31,12 +31,14 @@ export enum CustomerPaymentStatus {
   CREDIT_NOTE = 'credit-note',
   NEW_PAID = 'new-paid',
   NEW_UNPAID = 'new-unpaid',
+  REGULAR = 'regular',
 }
 export type CustomerPaymentStatusType = CustomerPaymentStatus;
 export const CUSTOMER_PAYMENT_STATUS_LABELS: Record<CustomerPaymentStatus, string> = {
   [CustomerPaymentStatus.CREDIT_NOTE]: 'Credit Note',
   [CustomerPaymentStatus.NEW_PAID]: 'New - Paid',
   [CustomerPaymentStatus.NEW_UNPAID]: 'New - Unpaid',
+  [CustomerPaymentStatus.REGULAR]: 'Regular',
 };
 export const PAYMENT_STATUS_LABELS: Record<CustomerPaymentStatus, string> = CUSTOMER_PAYMENT_STATUS_LABELS;
 export type MeasurementKata = 'prince' | 'factory';

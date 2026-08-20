@@ -26,7 +26,10 @@ export const FIELD_PREFIXES: Record<string, string> = {
 
 export type CustomerField = keyof typeof FIELD_PREFIXES;
 
-/** Build the full fenced customer-info block. Empty optional fields are skipped. */
+/** Build the full fenced customer-info block. Empty optional fields are skipped
+ *  EXCEPT billing, which is always emitted (even when empty) so that its line
+ *  position stays between *GST* and *Shipping Address* — the address is filled
+ *  in asynchronously right after a client is selected. */
 export const buildCustomerInfoBlock = (d: {
   client: string;
   gst: string;
@@ -36,7 +39,7 @@ export const buildCustomerInfoBlock = (d: {
   const lines = [
     `${FIELD_PREFIXES.client} ${d.client}`,
     d.gst ? `${FIELD_PREFIXES.gst} ${d.gst}` : '',
-    d.billing ? `${FIELD_PREFIXES.billing} ${d.billing}` : '',
+    `${FIELD_PREFIXES.billing} ${d.billing}`,
     `${FIELD_PREFIXES.shipping} ${d.shipping}`,
   ].filter(Boolean);
   return `${CUSTOMER_INFO_START}\n${lines.join('\n')}\n${CUSTOMER_INFO_END}`;

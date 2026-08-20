@@ -30,6 +30,7 @@ import {
   ChevronUp,
   RefreshCw,
   Check,
+  Search,
   MapPin,
   UploadCloud,
   Edit2,
@@ -139,6 +140,9 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   const [selectedSalesExec, setSelectedSalesExec] = useState<{ userId?: string; name?: string; email?: string } | null>(null);
   const [salesExecNoMatches, setSalesExecNoMatches] = useState(false);
   const [isSalesExecOpen, setIsSalesExecOpen] = useState(false);
+  // Keyboard-navigated highlighted option index (combobox pattern).
+  const [salesExecActiveIdx, setSalesExecActiveIdx] = useState(-1);
+  const salesExecContainerRef = React.useRef<HTMLDivElement | null>(null);
 
   // ─── salesExecutive debounce + cache ───────────────────────────────────────
   // Cache the full user list at module scope — user/role membership rarely
@@ -199,6 +203,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   // ─── Search salesExecutives (debounced + cached) ───────────────────────────
   const handleSalesExecSearch = (query: string) => {
     setSalesExecSearch(query);
+    setSalesExecActiveIdx(-1);
     setSalesExecNoMatches(false);
     if (!query.trim()) {
       setSalesExecOptions([]);
@@ -217,6 +222,57 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
       setSalesExecNoMatches(filtered.length === 0);
     }, 200);
   };
+
+  // Pick an option (from click or keyboard) and commit the selection.
+  const commitSalesExec = (exec: { id: string; name: string; email: string }) => {
+    setSelectedSalesExec({ userId: exec.id, name: exec.name, email: exec.email });
+    setSalesExecSearch(exec.name);
+    setIsSalesExecOpen(false);
+    setSalesExecOptions([]);
+    setSalesExecActiveIdx(-1);
+  };
+
+  // Keyboard support for the combobox: ArrowUp/Down to move the active option,
+  // Enter to commit it, Escape to close. Matches the WAI-ARIA combobox pattern.
+  const handleSalesExecKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const open = isSalesExecOpen && (salesExecOptions.length > 0 || salesExecNoMatches);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!open) {
+        setIsSalesExecOpen(true);
+        return;
+      }
+      setSalesExecActiveIdx((i) => Math.min(i + 1, salesExecOptions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!open) return;
+      setSalesExecActiveIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      if (open && salesExecActiveIdx >= 0 && salesExecOptions[salesExecActiveIdx]) {
+        e.preventDefault();
+        commitSalesExec(salesExecOptions[salesExecActiveIdx]);
+      }
+    } else if (e.key === 'Escape') {
+      if (open) {
+        e.preventDefault();
+        setIsSalesExecOpen(false);
+        setSalesExecActiveIdx(-1);
+      }
+    }
+  };
+
+  // Close on outside click (pointerdown) — more reliable than blur for comboboxes.
+  React.useEffect(() => {
+    if (!isSalesExecOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (salesExecContainerRef.current && !salesExecContainerRef.current.contains(e.target as Node)) {
+        setIsSalesExecOpen(false);
+        setSalesExecActiveIdx(-1);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [isSalesExecOpen]);
 
   // Cleanup pending debounce on unmount/close.
   React.useEffect(() => {
@@ -359,8 +415,10 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   const handleClientSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setClientSearchTerm(val);
-    setOrderData((prev) => ({ ...prev, client: val }));
-    if (selectedClient && selectedClient.name !== val) {
+    // Free-text is no longer allowed — client must be chosen from the dropdown.
+    // Clear any previously selected client so a stale selection can't slip
+    // through, and wipe any injected address block.
+    if (selectedClient) {
       setSelectedClient(null);
       setSelectedShippingAddress('Ask for client');
       clearInjectedAddresses();
@@ -735,6 +793,12 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
       return;
     }
 
+    // Client must be picked from the dropdown — free-text entry is not allowed.
+    if (!selectedClient) {
+      onShowMessage({ type: 'error', text: 'Please select a Client from the dropdown before creating the order.' });
+      return;
+    }
+
     setIsAddingOrder(true);
     try {
       const salesName =
@@ -894,62 +958,93 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                   </div>
                 </div>
 
-                {/* Organization Contact - Compact */}
+                {/* Organization Contact - Accessible combobox */}
                 <div className="md:col-span-5 space-y-2">
-                  <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
+                  <Label
+                    htmlFor="salesExecSearch"
+                    className="text-[10px] font-bold uppercase text-gray-400 ml-1"
+                  >
                     Organization Contact
                   </Label>
-                  <div className="relative">
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Input
-                          id="salesExecSearch"
-                          value={salesExecSearch}
-                          onChange={(e) => handleSalesExecSearch(e.target.value)}
-                          onFocus={() => setIsSalesExecOpen(true)}
-                          onBlur={() => setTimeout(() => setIsSalesExecOpen(false), 200)}
-                          placeholder="Sales exec..."
-                          className={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm focus:ring-4 focus:ring-blue-500/5 transition-all text-sm font-bold pr-9`}
-                        />
-                        {isSalesExecOpen && salesExecOptions.length === 0 && salesExecNoMatches === false && salesExecSearch && (
-                          <Loader2 className="absolute right-3 top-4 w-4 h-4 animate-spin text-blue-400" />
-                        )}
-                      </div>
-                      {selectedSalesExec && (
-                        <div className={`${inputHeight} px-3 flex items-center gap-1.5 rounded-2xl bg-blue-500/5 border border-blue-100 dark:border-blue-900/30 text-blue-600 text-[10px] font-black uppercase tracking-tight shrink-0`}>
-                          <Check className="w-3 h-3" />
-                          {selectedSalesExec.name || selectedSalesExec.email}
-                        </div>
-                      )}
+                  <div className="relative" ref={salesExecContainerRef}>
+                    <div className="relative">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 pointer-events-none" />
+                      <Input
+                        id="salesExecSearch"
+                        type="text"
+                        role="combobox"
+                        aria-expanded={isSalesExecOpen}
+                        aria-controls="salesExec-listbox"
+                        aria-autocomplete="list"
+                        aria-activedescendant={
+                          salesExecActiveIdx >= 0 ? `salesExec-opt-${salesExecActiveIdx}` : undefined
+                        }
+                        autoComplete="off"
+                        value={salesExecSearch}
+                        onChange={(e) => handleSalesExecSearch(e.target.value)}
+                        onFocus={() => setIsSalesExecOpen(true)}
+                        onClick={() => setIsSalesExecOpen(true)}
+                        onKeyDown={handleSalesExecKeyDown}
+                        placeholder="Search sales exec…"
+                        className={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm focus:ring-4 focus:ring-blue-500/5 transition-all text-sm font-bold pl-11 pr-9`}
+                      />
+                      <ChevronDown
+                        className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none transition-transform ${
+                          isSalesExecOpen ? 'rotate-180' : ''
+                        }`}
+                      />
                     </div>
 
                     {isSalesExecOpen && (salesExecOptions.length > 0 || salesExecNoMatches) && (
-                      <div
-                        className="absolute z-[10002] top-full left-0 w-full mt-2 bg-white dark:bg-gray-800 shadow-2xl rounded-[1.5rem] border border-gray-100 dark:border-white/10 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
-                        onMouseDown={(e) => e.preventDefault()}
+                      <ul
+                        id="salesExec-listbox"
+                        role="listbox"
+                        aria-label="Sales executives"
+                        className="absolute z-[10002] top-full left-0 w-full mt-2 bg-white dark:bg-gray-800 shadow-2xl rounded-[1.5rem] border border-gray-100 dark:border-white/10 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-200 p-1.5"
                       >
                         {salesExecNoMatches ? (
-                          <div className="p-4 text-center text-[10px] font-black text-gray-400 uppercase">
+                          <li
+                            role="presentation"
+                            className="p-4 text-center text-[10px] font-black text-gray-400 uppercase"
+                          >
                             No matching executives
-                          </div>
+                          </li>
                         ) : (
-                          salesExecOptions.map((exec) => (
-                            <div
-                              key={exec.id}
-                              onClick={() => {
-                                setSelectedSalesExec({ userId: exec.id, name: exec.name, email: exec.email });
-                                setSalesExecSearch(exec.name);
-                                setIsSalesExecOpen(false);
-                                setSalesExecOptions([]);
-                              }}
-                              className="p-3 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 cursor-pointer border-b border-gray-50 dark:border-white/5 last:border-0 transition-colors"
-                            >
-                              <div className="font-bold text-sm text-gray-800 dark:text-gray-100">{exec.name}</div>
-                              <div className="text-[10px] text-gray-400 font-bold mt-0.5">{exec.email}</div>
-                            </div>
-                          ))
+                          salesExecOptions.map((exec, idx) => {
+                            const isSelected =
+                              selectedSalesExec?.userId === exec.id ||
+                              selectedSalesExec?.email === exec.email;
+                            const isActive = idx === salesExecActiveIdx;
+                            return (
+                              <li
+                                key={exec.id}
+                                id={`salesExec-opt-${idx}`}
+                                role="option"
+                                aria-selected={isSelected}
+                                onMouseEnter={() => setSalesExecActiveIdx(idx)}
+                                onClick={() => commitSalesExec(exec)}
+                                className={`flex items-center justify-between gap-2 p-3 rounded-xl cursor-pointer border-b border-gray-50 dark:border-white/5 last:border-0 transition-colors ${
+                                  isActive
+                                    ? 'bg-blue-100/70 dark:bg-blue-900/40'
+                                    : 'hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
+                                }`}
+                              >
+                                <div className="min-w-0">
+                                  <div className="font-bold text-sm text-gray-800 dark:text-gray-100 truncate">
+                                    {exec.name}
+                                  </div>
+                                  <div className="text-[10px] text-gray-400 font-bold mt-0.5 truncate">
+                                    {exec.email}
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <Check className="w-4 h-4 text-blue-600 shrink-0" />
+                                )}
+                              </li>
+                            );
+                          })
                         )}
-                      </div>
+                      </ul>
                     )}
                   </div>
                 </div>
@@ -1118,6 +1213,12 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                         className="rounded-xl font-bold py-2.5 text-orange-600"
                       >
                         New - Unpaid
+                      </SelectItem>
+                      <SelectItem
+                        value="regular"
+                        className="rounded-xl font-bold py-2.5 text-gray-600"
+                      >
+                        Regular
                       </SelectItem>
                     </SelectContent>
                   </Select>
