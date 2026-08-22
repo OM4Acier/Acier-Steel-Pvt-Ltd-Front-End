@@ -30,7 +30,6 @@ import {
   ChevronUp,
   RefreshCw,
   Check,
-  Search,
   MapPin,
   UploadCloud,
   Edit2,
@@ -137,20 +136,12 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   const [selectedShippingAddress, setSelectedShippingAddress] = useState<string>('Ask for client');
 
   // ─── salesExecutive State ───────────────────────────────────────────────────
-  const [salesExecSearch, setSalesExecSearch] = useState('');
-  const [salesExecOptions, setSalesExecOptions] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [selectedSalesExec, setSelectedSalesExec] = useState<{ userId?: string; name?: string; email?: string } | null>(null);
-  const [salesExecNoMatches, setSalesExecNoMatches] = useState(false);
-  const [isSalesExecOpen, setIsSalesExecOpen] = useState(false);
-  // Keyboard-navigated highlighted option index (combobox pattern).
-  const [salesExecActiveIdx, setSalesExecActiveIdx] = useState(-1);
-  const salesExecContainerRef = React.useRef<HTMLDivElement | null>(null);
 
-  // ─── salesExecutive debounce + cache ───────────────────────────────────────
+  // ─── salesExecutive cache ──────────────────────────────────────────────────
   // Cache the full user list at module scope — user/role membership rarely
   // changes within a session. We only refetch when the cache is missing or
-  // explicitly invalidated. Debounce so we don't re-filter on every keystroke.
-  const salesExecDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // explicitly invalidated.
   const salesExecCacheRef = React.useRef<Array<{ id: string; name: string; email: string }> | null>(null);
   const salesExecInflightRef = React.useRef<Promise<Array<{ id: string; name: string; email: string }>> | null>(null);
 
@@ -189,99 +180,44 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     current: string;
   }>({ total: 0, completed: 0, current: '' });
 
-  // ─── Initialize salesExecutive default ──────────────────────────────────────
-  React.useEffect(() => {
-    if (currentUserProfile && !selectedSalesExec) {
-      const defaultExec = {
-        userId: currentUserProfile.id,
-        name: currentUserProfile.name,
-        email: currentUserProfile.email,
-      };
-      setSelectedSalesExec(defaultExec);
-      setSalesExecSearch(currentUserProfile.name);
-    }
-  }, [currentUserProfile, selectedSalesExec]);
+  // ─── salesExecutive options (single source for the dropdown) ───────────────
+  // Options are keyed by `user-<clerkId>` so the Select value is a stable id.
+  const [orgContactOptions, setOrgContactOptions] = useState<Array<{ value: string; label: string; subLabel: string }>>([]);
 
-  // ─── Search salesExecutives (debounced + cached) ───────────────────────────
-  const handleSalesExecSearch = (query: string) => {
-    setSalesExecSearch(query);
-    setSalesExecActiveIdx(-1);
-    setSalesExecNoMatches(false);
-    if (!query.trim()) {
-      setSalesExecOptions([]);
-      return;
-    }
-    // Cancel any pending filter call — debounce 200ms so we don't filter on
-    // every keystroke. Filter is pure local work against the cached user list.
-    if (salesExecDebounceRef.current) clearTimeout(salesExecDebounceRef.current);
-    salesExecDebounceRef.current = setTimeout(async () => {
-      const users = await fetchSalesExecUsers();
-      const q = query.toLowerCase();
-      const filtered = users.filter(
-        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
+  // Populate the dropdown list from the cached user directory (name + email),
+  // and set the current user as the default selection when the dialog opens.
+  React.useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    void fetchSalesExecUsers().then((users) => {
+      if (cancelled) return;
+      setOrgContactOptions(
+        users.map((u) => ({ value: `user-${u.id}`, label: u.name, subLabel: u.email })),
       );
-      setSalesExecOptions(filtered);
-      setSalesExecNoMatches(filtered.length === 0);
-    }, 200);
-  };
-
-  // Pick an option (from click or keyboard) and commit the selection.
-  const commitSalesExec = (exec: { id: string; name: string; email: string }) => {
-    setSelectedSalesExec({ userId: exec.id, name: exec.name, email: exec.email });
-    setSalesExecSearch(exec.name);
-    setIsSalesExecOpen(false);
-    setSalesExecOptions([]);
-    setSalesExecActiveIdx(-1);
-  };
-
-  // Keyboard support for the combobox: ArrowUp/Down to move the active option,
-  // Enter to commit it, Escape to close. Matches the WAI-ARIA combobox pattern.
-  const handleSalesExecKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const open = isSalesExecOpen && (salesExecOptions.length > 0 || salesExecNoMatches);
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (!open) {
-        setIsSalesExecOpen(true);
-        return;
+      if (currentUserProfile && !selectedSalesExec) {
+        const self = users.find((u) => u.id === currentUserProfile.id);
+        setSelectedSalesExec(
+          self
+            ? { userId: self.id, name: self.name, email: self.email }
+            : { userId: currentUserProfile.id, name: currentUserProfile.name, email: currentUserProfile.email },
+        );
       }
-      setSalesExecActiveIdx((i) => Math.min(i + 1, salesExecOptions.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (!open) return;
-      setSalesExecActiveIdx((i) => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter') {
-      if (open && salesExecActiveIdx >= 0 && salesExecOptions[salesExecActiveIdx]) {
-        e.preventDefault();
-        commitSalesExec(salesExecOptions[salesExecActiveIdx]);
-      }
-    } else if (e.key === 'Escape') {
-      if (open) {
-        e.preventDefault();
-        setIsSalesExecOpen(false);
-        setSalesExecActiveIdx(-1);
-      }
-    }
-  };
-
-  // Close on outside click (pointerdown) — more reliable than blur for comboboxes.
-  React.useEffect(() => {
-    if (!isSalesExecOpen) return;
-    const onPointerDown = (e: MouseEvent) => {
-      if (salesExecContainerRef.current && !salesExecContainerRef.current.contains(e.target as Node)) {
-        setIsSalesExecOpen(false);
-        setSalesExecActiveIdx(-1);
-      }
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    return () => document.removeEventListener('mousedown', onPointerDown);
-  }, [isSalesExecOpen]);
-
-  // Cleanup pending debounce on unmount/close.
-  React.useEffect(() => {
+    });
     return () => {
-      if (salesExecDebounceRef.current) clearTimeout(salesExecDebounceRef.current);
+      cancelled = true;
     };
-  }, []);
+  }, [isOpen, fetchSalesExecUsers, currentUserProfile, selectedSalesExec]);
+
+  // The Select needs a `value` of the form `user-<clerkId>`.
+  const selectedSalesExecValue = selectedSalesExec ? `user-${selectedSalesExec.userId}` : undefined;
+
+  // Commit a selection from the dropdown's value (`user-<clerkId>`).
+  const commitSalesExecById = (val: string) => {
+    const id = val.replace(/^user-/, '');
+    const exec = salesExecCacheRef.current?.find((u) => u.id === id);
+    if (!exec) return;
+    setSelectedSalesExec({ userId: exec.id, name: exec.name, email: exec.email });
+  };
 
   // ─── Prefill from Quotation Effect ──────────────────────────────────────────
   React.useEffect(() => {
@@ -336,10 +272,24 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
       }
     }
 
-    // 4. Handle salesExec suggestion prefill search
+    // 4. Handle salesExec suggestion prefill — match the suggested name/email
+    //    to a cached user and select that option in the dropdown.
     if (prefillFromQuotation.salesExec) {
-      setSalesExecSearch(prefillFromQuotation.salesExec);
-      handleSalesExecSearch(prefillFromQuotation.salesExec);
+      const suggestion = prefillFromQuotation.salesExec.toLowerCase();
+      const match = salesExecCacheRef.current?.find(
+        (u) =>
+          u.name.toLowerCase().includes(suggestion) ||
+          u.email.toLowerCase().includes(suggestion),
+      );
+      if (match) {
+        setSelectedSalesExec({ userId: match.id, name: match.name, email: match.email });
+      } else {
+        // Fallback: keep the typed suggestion as the display name.
+        setSelectedSalesExec((prev) => prev ?? {
+          name: prefillFromQuotation.salesExec,
+          email: '',
+        });
+      }
     }
 
     // Store quotationNo for traceability
@@ -976,95 +926,25 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                   </div>
                 </div>
 
-                {/* Organization Contact - Accessible combobox */}
+                {/* Organization Contact - Reusable searchable dropdown */}
                 <div className="md:col-span-5 space-y-2">
                   <Label
-                    htmlFor="salesExecSearch"
+                    htmlFor="orgContact"
                     className="text-[10px] font-bold uppercase text-gray-400 ml-1"
                   >
                     Organization Contact
                   </Label>
-                  <div className="relative" ref={salesExecContainerRef}>
-                    <div className="relative">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 pointer-events-none" />
-                      <Input
-                        id="salesExecSearch"
-                        type="text"
-                        role="combobox"
-                        aria-expanded={isSalesExecOpen}
-                        aria-controls="salesExec-listbox"
-                        aria-autocomplete="list"
-                        aria-activedescendant={
-                          salesExecActiveIdx >= 0 ? `salesExec-opt-${salesExecActiveIdx}` : undefined
-                        }
-                        autoComplete="off"
-                        value={salesExecSearch}
-                        onChange={(e) => handleSalesExecSearch(e.target.value)}
-                        onFocus={() => setIsSalesExecOpen(true)}
-                        onClick={() => setIsSalesExecOpen(true)}
-                        onKeyDown={handleSalesExecKeyDown}
-                        placeholder="Search sales exec…"
-                        className={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm focus:ring-4 focus:ring-blue-500/5 transition-all text-sm font-bold pl-11 pr-9`}
-                      />
-                      <ChevronDown
-                        className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none transition-transform ${
-                          isSalesExecOpen ? 'rotate-180' : ''
-                        }`}
-                      />
-                    </div>
-
-                    {isSalesExecOpen && (salesExecOptions.length > 0 || salesExecNoMatches) && (
-                      <ul
-                        id="salesExec-listbox"
-                        role="listbox"
-                        aria-label="Sales executives"
-                        className="absolute z-[10002] top-full left-0 w-full mt-2 bg-white dark:bg-gray-800 shadow-2xl rounded-[1.5rem] border border-gray-100 dark:border-white/10 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-200 p-1.5"
-                      >
-                        {salesExecNoMatches ? (
-                          <li
-                            role="presentation"
-                            className="p-4 text-center text-[10px] font-black text-gray-400 uppercase"
-                          >
-                            No matching executives
-                          </li>
-                        ) : (
-                          salesExecOptions.map((exec, idx) => {
-                            const isSelected =
-                              selectedSalesExec?.userId === exec.id ||
-                              selectedSalesExec?.email === exec.email;
-                            const isActive = idx === salesExecActiveIdx;
-                            return (
-                              <li
-                                key={exec.id}
-                                id={`salesExec-opt-${idx}`}
-                                role="option"
-                                aria-selected={isSelected}
-                                onMouseEnter={() => setSalesExecActiveIdx(idx)}
-                                onClick={() => commitSalesExec(exec)}
-                                className={`flex items-center justify-between gap-2 p-3 rounded-xl cursor-pointer border-b border-gray-50 dark:border-white/5 last:border-0 transition-colors ${
-                                  isActive
-                                    ? 'bg-blue-100/70 dark:bg-blue-900/40'
-                                    : 'hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
-                                }`}
-                              >
-                                <div className="min-w-0">
-                                  <div className="font-bold text-sm text-gray-800 dark:text-gray-100 truncate">
-                                    {exec.name}
-                                  </div>
-                                  <div className="text-[10px] text-gray-400 font-bold mt-0.5 truncate">
-                                    {exec.email}
-                                  </div>
-                                </div>
-                                {isSelected && (
-                                  <Check className="w-4 h-4 text-blue-600 shrink-0" />
-                                )}
-                              </li>
-                            );
-                          })
-                        )}
-                      </ul>
-                    )}
-                  </div>
+                  <SelectDropdown
+                    id="orgContact"
+                    options={orgContactOptions}
+                    value={selectedSalesExecValue}
+                    onValueChange={commitSalesExecById}
+                    placeholder="Select organization contact"
+                    searchable
+                    searchPlaceholder="Search by name or email…"
+                    triggerClassName={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm focus:ring-4 focus:ring-blue-500/5 transition-all text-sm font-bold`}
+                    contentClassName="z-[10002] rounded-2xl p-2 shadow-2xl border-gray-100 max-h-60 overflow-y-auto"
+                  />
                 </div>
               </div>
             </section>
