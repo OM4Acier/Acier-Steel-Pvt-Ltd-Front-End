@@ -3,9 +3,10 @@
 // Options are passed in as data (single source of truth) rather than
 // hard-coded <SelectItem> lists scattered across components.
 //
-// Optional `searchable` mode adds an inline filter input inside the
+// Optional `searchable` mode adds an inline filter input at the top of the
 // popover (powers the org-contact / sales-exec picker that can have many
-// users). `subLabel` renders a secondary line (e.g. an email) per option.
+// users). Each option's `label` is the only text shown; `subLabel` (e.g. an
+// email) is NOT displayed but is still matched when filtering.
 import React, { useState } from 'react';
 import {
   Select,
@@ -84,7 +85,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
       <SelectContent className={contentClassName}>
         {searchable && (
           <div
-            className="flex items-center gap-2 px-2 pb-2 mb-1 border-b border-gray-100 dark:border-white/10"
+            className="flex items-center gap-2 w-full px-2 pb-2 mb-1 border-b border-gray-100 dark:border-white/10"
             onKeyDown={(e) => e.stopPropagation()}
           >
             <Search className="w-3.5 h-3.5 text-gray-400 shrink-0 pointer-events-none" />
@@ -93,22 +94,13 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder}
-              className="h-8 border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 text-sm"
+              className="h-8 w-full border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 text-sm"
             />
           </div>
         )}
         {filtered.map((opt) => (
           <SelectItem key={opt.value} value={opt.value} className={opt.className}>
-            {opt.subLabel ? (
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="font-bold text-sm truncate">{opt.label}</span>
-                <span className="text-[10px] text-gray-400 font-medium truncate">
-                  {opt.subLabel}
-                </span>
-              </div>
-            ) : (
-              opt.label
-            )}
+            {opt.label}
           </SelectItem>
         ))}
         {children}
