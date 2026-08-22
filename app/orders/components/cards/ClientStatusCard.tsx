@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +17,12 @@ import { PAYMENT_STATUS_COLORS, STATUS_COLORS } from '../../constants';
 import { formatContactNumberForWhatsApp } from '../../fileUtils';
 import { ClientStatusCardProps } from './cardTypes';
 import { PermissionGate } from '@/components/PermissionGate';
+import { SelectDropdown } from '@/components/ui/SelectDropdown';
+import {
+  PAYMENT_STATUS_OPTIONS,
+  ORDER_STATUS_OPTIONS,
+  buildShippingOptions,
+} from '../../selectOptions';
 
 const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
   isEditMode, role, status, customerPaymentStatus, client, contactNo,
@@ -89,17 +94,14 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
               <Label className="font-medium flex items-center gap-1 text-sm">
                 <MapPin className="w-4 h-4 text-gray-500" /> Shipping Address:
               </Label>
-              <Select value={selectedShippingAddress} onValueChange={(v) => onShippingAddressChange?.(v)}>
-                <SelectTrigger className="w-full h-9">
-                  <SelectValue placeholder="Select shipping address" />
-                </SelectTrigger>
-                <SelectContent className="z-[9050]">
-                  <SelectItem value="Ask for client">Ask for client</SelectItem>
-                  {shippingAddresses.map((addr, i) => (
-                    <SelectItem key={i} value={addr}>{addr}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SelectDropdown
+                options={buildShippingOptions(shippingAddresses)}
+                value={selectedShippingAddress}
+                onValueChange={(v) => onShippingAddressChange?.(v)}
+                placeholder="Select shipping address"
+                triggerClassName="w-full h-9"
+                contentClassName="z-[9050]"
+              />
             </div>
           )}
         </PermissionGate>
@@ -267,16 +269,14 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
             <DollarSign className="w-4 h-4 text-gray-500" /> Payment:
           </Label>
           {showEditPaymentStatus ? (
-            <Select onValueChange={onPaymentStatusChange} value={customerPaymentStatus || ''}>
-              <SelectTrigger id="customerPaymentStatus" className="w-full h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="z-[9050]">
-                <SelectItem value="credit-note">Credit Note</SelectItem>
-                <SelectItem value="new-paid">New Customer - Paid</SelectItem>
-                <SelectItem value="new-unpaid">New Customer - Unpaid</SelectItem>
-              </SelectContent>
-            </Select>
+            <SelectDropdown
+              options={PAYMENT_STATUS_OPTIONS}
+              value={customerPaymentStatus || ''}
+              onValueChange={onPaymentStatusChange}
+              triggerClassName="w-full h-9"
+              contentClassName="z-[9050]"
+              id="customerPaymentStatus"
+            />
           ) : (
             <Badge
               className={`${PAYMENT_STATUS_COLORS[customerPaymentStatus ?? ''] ?? PAYMENT_STATUS_COLORS['credit-note']} font-medium p-2 text-xs`}
@@ -297,19 +297,14 @@ const ClientStatusCard: React.FC<ClientStatusCardProps> = ({
             <History className="w-4 h-4 text-gray-500" /> Status:
           </Label>
           {showEditStatusSelect ? (
-            <Select onValueChange={onStatusSelectChange} value={status || ''}>
-              <SelectTrigger className="w-full h-9">
-                <SelectValue placeholder="Select Status" />
-              </SelectTrigger>
-              <SelectContent className="z-[9050]">
-                <SelectItem value="Order Created">Order Created</SelectItem>
-                <SelectItem value="Approved for Production">Approved for Production</SelectItem>
-                <SelectItem value="Ready for Dispatch">Ready for Dispatch</SelectItem>
-                <SelectItem value="Dispatched and Invoiced">Dispatched and Invoiced</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
-                <SelectItem value="Cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
+            <SelectDropdown
+              options={ORDER_STATUS_OPTIONS}
+              value={status || ''}
+              onValueChange={onStatusSelectChange}
+              placeholder="Select Status"
+              triggerClassName="w-full h-9"
+              contentClassName="z-[9050]"
+            />
           ) : (
             <Badge className={`${STATUS_COLORS[status || 'Order Created']} text-white font-semibold px-2 py-1 rounded-full text-xs`}>
               {status}

@@ -2,7 +2,11 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SelectDropdown } from '@/components/ui/SelectDropdown';
+import {
+  TRANSPORT_PROVIDER_OPTIONS,
+  MEASUREMENT_KATA_OPTIONS,
+} from '../../selectOptions';
 import {
   Truck, Gauge, Building, ChevronDown, ChevronUp,
 } from 'lucide-react';
@@ -50,15 +54,14 @@ const DeliveryVehicleCard: React.FC<DeliveryVehicleCardProps> = ({
             <Label htmlFor="measurementKata" className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Measurement Kata</Label>
           </div>
           {isEditMode && canEditMeasurementKata ? (
-            <Select onValueChange={onWeightScaleChange} value={measurementKata || ''}>
-              <SelectTrigger className="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm">
-                <SelectValue placeholder="Select Type" />
-              </SelectTrigger>
-              <SelectContent className="z-[9050]">
-                <SelectItem value="prince">Prince Kata</SelectItem>
-                <SelectItem value="factory">Factory Kata</SelectItem>
-              </SelectContent>
-            </Select>
+            <SelectDropdown
+              options={MEASUREMENT_KATA_OPTIONS}
+              value={measurementKata || ''}
+              onValueChange={onWeightScaleChange}
+              placeholder="Select Type"
+              triggerClassName="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm"
+              contentClassName="z-[9050]"
+            />
           ) : (
             <div className="text-lg font-bold text-rose-800 dark:text-rose-200">
               {measurementKata ? MEASUREMENT_KATA_LABELS[measurementKata] : 'N/A'}
@@ -74,16 +77,14 @@ const DeliveryVehicleCard: React.FC<DeliveryVehicleCardProps> = ({
           </div>
           {isEditMode && canEditTransportProvider ? (
             <>
-              <Select onValueChange={onTransportProviderChange} value={transportProvider || ''}>
-                <SelectTrigger className="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm">
-                  <SelectValue placeholder="Select Provider" />
-                </SelectTrigger>
-                <SelectContent className="z-[9050]">
-                  <SelectItem value="client">Client Transport</SelectItem>
-                  <SelectItem value="own">Own Transport</SelectItem>
-                  <SelectItem value="porter">Porter</SelectItem>
-                </SelectContent>
-              </Select>
+              <SelectDropdown
+                options={TRANSPORT_PROVIDER_OPTIONS}
+                value={transportProvider || ''}
+                onValueChange={onTransportProviderChange}
+                placeholder="Select Provider"
+                triggerClassName="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm"
+                contentClassName="z-[9050]"
+              />
               {transportProvider === 'own' && (
                 <div className="space-y-1 mt-2">
                   <Label htmlFor="transportProviderName" className="font-medium text-xs text-gray-700 dark:text-gray-300">Provider Name:</Label>

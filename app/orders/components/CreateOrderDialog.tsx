@@ -17,7 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SelectItem } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import {
   Loader2,
@@ -40,6 +40,8 @@ import {
   Phone,
 } from 'lucide-react';
 import { CustomerPaymentStatus, DeoNumbersByPrefix, DialogMessageType, Order, MeasurementKata } from '../types';
+import { PAYMENT_STATUS_OPTIONS, TRANSPORT_PROVIDER_OPTIONS, MEASUREMENT_KATA_OPTIONS, SHIPPING_SENTINEL_OPTIONS } from '../selectOptions';
+import { SelectDropdown } from '@/components/ui/SelectDropdown';
 import { ordersApi } from '@/lib/api/endpoints/ordersApi';
 const apiService = ordersApi;
 import { customersApi, CustomerSummary } from '@/lib/api/endpoints/customers';
@@ -473,13 +475,22 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
           const billingText = `*Billing Address*: ${addresses.billingAddress}`;
           setInjectedBillingText(billingText);
 
-          // Insert billing address into the fenced customer-info block's
-          // `ci-billing` field (per-field replace, preserves everything else).
           setOrderData((prev) => {
             const currentDetails = prev.details?.invoiceDetails || '';
             const next = replaceCustomerField(currentDetails, 'billing', addresses.billingAddress ?? '');
-            return { ...prev, details: { ...prev.details!, invoiceDetails: next } };
+            // If the user pre-selected "Same as Billing Address" before the
+            // billing address finished loading, backfill the real value now.
+            const withShipping =
+              prev.details?.invoiceDetails &&
+              selectedShippingAddress === 'same-as-billing' &&
+              addresses.billingAddress
+                ? replaceCustomerField(next, 'shipping', addresses.billingAddress)
+                : next;
+            return { ...prev, details: { ...prev.details!, invoiceDetails: withShipping } };
           });
+          if (selectedShippingAddress === 'same-as-billing' && addresses.billingAddress) {
+            setInjectedShippingText(`*Shipping Address*: ${addresses.billingAddress}`);
+          }
         }
       } catch (error: unknown) {
         console.error('Failed to fetch addresses', error);
@@ -582,18 +593,25 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   };
 
   const handleShippingAddressChange = (addr: string) => {
-    setSelectedShippingAddress(addr);
+    // Sentinel for "Same as Billing Address" — the select shows the friendly
+    // label, but the injected invoice/shipping block receives the actual
+    // billing address so the order carries the real value.
+    const isSameAsBilling = addr === 'same-as-billing';
+    const billingAddr = (selectedClient as any)?.billingAddress || '';
+    const resolved = isSameAsBilling ? (billingAddr || 'Same as Billing Address') : addr;
+
+    setSelectedShippingAddress(addr); // keep sentinel/value so the Select shows correctly
 
     setOrderData((prev) => {
       const currentDetails = prev.details?.invoiceDetails || '';
-      const next = replaceCustomerField(currentDetails, 'shipping', addr);
+      const next = replaceCustomerField(currentDetails, 'shipping', resolved);
       return {
         ...prev,
         details: { ...prev.details!, invoiceDetails: next },
       };
     });
 
-    setInjectedShippingText(`*Shipping Address*: ${addr}`);
+    setInjectedShippingText(`*Shipping Address*: ${resolved}`);
   };
 
   // ─── Form reset ───────────────────────────────────────────────────────────
@@ -1189,39 +1207,14 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                 </div>
 
                 <div className="md:col-span-3 lg:col-span-4">
-                  <Select
-                    onValueChange={handlePaymentStatusChange}
+                  <SelectDropdown
+                    options={PAYMENT_STATUS_OPTIONS}
                     value={orderData.customerPaymentStatus}
-                  >
-                    <SelectTrigger
-                      className={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm px-5 text-sm font-bold`}
-                    >
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent className="z-[10001] rounded-2xl p-2 shadow-2xl border-gray-100">
-                      <SelectItem value="credit-note" className="rounded-xl font-bold py-2.5">
-                        Credit Note
-                      </SelectItem>
-                      <SelectItem
-                        value="new-paid"
-                        className="rounded-xl font-bold py-2.5 text-green-600"
-                      >
-                        New - Prepaid
-                      </SelectItem>
-                      <SelectItem
-                        value="new-unpaid"
-                        className="rounded-xl font-bold py-2.5 text-orange-600"
-                      >
-                        New - Unpaid
-                      </SelectItem>
-                      <SelectItem
-                        value="regular"
-                        className="rounded-xl font-bold py-2.5 text-gray-600"
-                      >
-                        Regular
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                    onValueChange={handlePaymentStatusChange}
+                    placeholder="Status"
+                    triggerClassName={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm px-5 text-sm font-bold`}
+                    contentClassName="z-[10001] rounded-2xl p-2 shadow-2xl border-gray-100"
+                  />
                 </div>
               </div>
 
@@ -1269,38 +1262,29 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                           <Check className="w-2.5 h-2.5" /> Auto-Synced
                         </div>
                       </div>
-                      <Select
-                        onValueChange={handleShippingAddressChange}
+                      <SelectDropdown
+                        options={SHIPPING_SENTINEL_OPTIONS}
                         value={selectedShippingAddress}
+                        onValueChange={handleShippingAddressChange}
+                        placeholder="Select Logistics Point"
+                        triggerClassName={`${inputHeight} rounded-2xl bg-gray-50/50 dark:bg-gray-900/50 border-gray-100 shadow-sm font-black text-gray-700 dark:text-gray-200`}
+                        contentClassName="z-[10001] rounded-[1.5rem] p-2 shadow-2xl border-gray-100 max-h-60 overflow-y-auto"
                       >
-                        <SelectTrigger
-                          className={`${inputHeight} rounded-2xl bg-gray-50/50 dark:bg-gray-900/50 border-gray-100 shadow-sm font-black text-gray-700 dark:text-gray-200`}
-                        >
-                          <SelectValue placeholder="Select Logistics Point" />
-                        </SelectTrigger>
-                        <SelectContent className="z-[10001] rounded-[1.5rem] p-2 shadow-2xl border-gray-100 max-h-60 overflow-y-auto">
-                          <SelectItem
-                            value="Ask for client"
-                            className="rounded-xl font-black text-blue-600 bg-blue-50/50 hover:bg-blue-100 py-3 mb-2"
-                          >
-                            Consult Client Later
-                          </SelectItem>
-                          {(selectedClient as any).shippingAddresses?.map(
-                            (addr: any, idx: number) => (
-                              <SelectItem key={idx} value={addr.address} className="rounded-xl py-3 px-4">
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="font-black text-xs uppercase tracking-tight">
-                                    {addr.label}
-                                  </span>
-                                  <span className="text-[10px] text-gray-400 truncate max-w-[280px]">
-                                    {addr.address}
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            ),
-                          )}
-                        </SelectContent>
-                      </Select>
+                        {(selectedClient as any).shippingAddresses?.map(
+                          (addr: any, idx: number) => (
+                            <SelectItem key={idx} value={addr.address} className="rounded-xl py-3 px-4">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-black text-xs uppercase tracking-tight">
+                                  {addr.label}
+                                </span>
+                                <span className="text-[10px] text-gray-400 truncate max-w-[280px]">
+                                  {addr.address}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectDropdown>
                     </div>
                   </div>
                 </div>
@@ -1356,32 +1340,19 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                     Transit Provider
                   </Label>
                   <div className="flex gap-3">
-                    <Select
+                    <SelectDropdown
+                      options={TRANSPORT_PROVIDER_OPTIONS}
+                      value={orderData.details?.transportProvider || ''}
                       onValueChange={(v) =>
                         setOrderData((prev) => ({
                           ...prev,
                           details: { ...prev.details!, transportProvider: v as any },
                         }))
                       }
-                      value={orderData.details?.transportProvider || ''}
-                    >
-                      <SelectTrigger
-                        className={`${inputHeight} rounded-2xl flex-1 bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
-                      >
-                        <SelectValue placeholder="Provider" />
-                      </SelectTrigger>
-                      <SelectContent className="z-[10001] rounded-xl">
-                                              <SelectItem value="client" className="font-bold">
-                                                Client Arrangement
-                                              </SelectItem>
-                                                <SelectItem value="porter" className="font-bold">
-                                                Porter
-                                              </SelectItem>
-                                              <SelectItem value="own" className="font-bold">
-                                                Company Fleet
-                                              </SelectItem>
-                                            </SelectContent>
-                    </Select>
+                      placeholder="Provider"
+                      triggerClassName={`${inputHeight} rounded-2xl flex-1 bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
+                      contentClassName="z-[10001] rounded-xl"
+                    />
                     {orderData.details?.transportProvider === 'own' && (
                       <Input
                         className={`${inputHeight} rounded-2xl flex-1 border-blue-100 dark:border-blue-900/30 font-bold text-sm shadow-sm`}
@@ -1401,24 +1372,14 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
                                     Measurement Kata
                                   </Label>
-                                  <Select
-                                    onValueChange={handleWeightScaleChange}
+                                  <SelectDropdown
+                                    options={MEASUREMENT_KATA_OPTIONS}
                                     value={orderData.details?.measurementKata || ''}
-                                  >
-                                    <SelectTrigger
-                                      className={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
-                                    >
-                                      <SelectValue placeholder="Select Kata Type" />
-                                    </SelectTrigger>
-                                    <SelectContent className="z-[10001] rounded-xl">
-                                      <SelectItem value="prince" className="font-bold">
-                                        Prince Kata
-                                      </SelectItem>
-                                      <SelectItem value="factory" className="font-bold">
-                                        Factory Kata
-                                      </SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                                    onValueChange={handleWeightScaleChange}
+                                    placeholder="Select Kata Type"
+                                    triggerClassName={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
+                                    contentClassName="z-[10001] rounded-xl"
+                                  />
                                 </div>
               </div>
 
