@@ -7,7 +7,7 @@
 // popover (powers the org-contact / sales-exec picker that can have many
 // users). Each option's `label` is the only text shown; `subLabel` (e.g. an
 // email) is NOT displayed but is still matched when filtering.
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Select,
   SelectContent,
@@ -65,6 +65,19 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   ...rest
 }) => {
   const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
+  // When the popover opens in searchable mode, focus the search input.
+  // (Radix grabs focus for the first item on open, so autoFocus alone is
+  // unreliable — we focus programmatically after the content mounts.)
+  useEffect(() => {
+    if (open && searchable) {
+      const t = setTimeout(() => searchRef.current?.focus(), 0);
+      return () => clearTimeout(t);
+    }
+    if (!open) setQuery('');
+  }, [open, searchable]);
 
   const filtered = searchable && query
     ? options.filter((o) =>
@@ -75,10 +88,11 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   const handleSelect = (v: string) => {
     onValueChange?.(v);
     setQuery('');
+    setOpen(false);
   };
 
   return (
-    <Select value={value} onValueChange={handleSelect} disabled={disabled}>
+    <Select value={value} onValueChange={handleSelect} disabled={disabled} open={open} onOpenChange={setOpen}>
       <SelectTrigger id={id} className={triggerClassName} aria-label={rest['aria-label']}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
@@ -90,7 +104,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
           >
             <Search className="w-3.5 h-3.5 text-gray-400 shrink-0 pointer-events-none" />
             <Input
-              autoFocus
+              ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder}
