@@ -133,7 +133,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
   const [injectedGstText, setInjectedGstText] = useState('');
   const [injectedBillingText, setInjectedBillingText] = useState('');
   const [injectedShippingText, setInjectedShippingText] = useState('');
-  const [selectedShippingAddress, setSelectedShippingAddress] = useState<string>('Ask for client');
+  const [selectedShippingAddress, setSelectedShippingAddress] = useState<string>('Ask for Client');
 
   // ─── salesExecutive State ───────────────────────────────────────────────────
   const [selectedSalesExec, setSelectedSalesExec] = useState<{ userId?: string; name?: string; email?: string } | null>(null);

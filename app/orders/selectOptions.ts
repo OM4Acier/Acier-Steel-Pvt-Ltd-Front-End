@@ -61,7 +61,7 @@ export const ORDER_STATUS_OPTIONS: SelectOption[] = [
 // ─── Shipping Address sentinels (static, non-customer options) ─────────────
 // Dynamic per-customer addresses are appended at the call site via children.
 export const SHIPPING_SENTINEL_OPTIONS: SelectOption[] = [
-  { value: 'Ask for client', label: 'Consult Client Later' },
+  { value: 'Ask for client', label: 'Ask for Client' },
   { value: 'same-as-billing', label: 'Same as Billing Address' },
 ];
 
