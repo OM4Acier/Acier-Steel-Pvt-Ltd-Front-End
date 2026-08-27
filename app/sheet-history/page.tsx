@@ -123,18 +123,24 @@ export default function SheetHistoryPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await sheetReaderApi.read({
-        source,
-        search: search.trim() || undefined,
-        filterColumn: filterColumn || undefined,
-        filterValue: filterValue || undefined,
-        from: from ? format(from, "yyyy-MM-dd") : undefined,
-        to: to ? format(to, "yyyy-MM-dd") : undefined,
-        sortBy: sortBy || undefined,
-        sortDir,
-        page,
-        limit,
-      });
+      // Build params manually so filterColumn/filterValue and from/to are only
+      // ever sent as complete pairs (the backend rejects half-specified filters,
+      // and a lone filterColumn otherwise returns zero rows → false "No matching rows").
+      const params: Parameters<typeof sheetReaderApi.read>[0] = { source, sortDir };
+      if (search.trim()) params.search = search.trim();
+      if (filterColumn && filterValue) {
+        params.filterColumn = filterColumn;
+        params.filterValue = filterValue;
+      }
+      if (from && to) {
+        params.from = format(from, "yyyy-MM-dd");
+        params.to = format(to, "yyyy-MM-dd");
+      }
+      if (sortBy) params.sortBy = sortBy;
+      params.page = page;
+      params.limit = limit;
+
+      const result = await sheetReaderApi.read(params);
 
       if (result.success) {
         setResp(result);
