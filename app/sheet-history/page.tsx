@@ -19,7 +19,11 @@ import {
   ChevronRight,
   Database,
 } from "lucide-react";
-import { sheetReaderApi, type SheetReadResponse } from "@/lib/api/endpoints/sheetReaderApi";
+import {
+  sheetReaderApi,
+  type SheetReadResponse,
+  type SheetOptionsResponse,
+} from "@/lib/api/endpoints/sheetReaderApi";
 
 const LIMIT_OPTIONS = [
   { value: "50", label: "50" },
@@ -34,43 +38,99 @@ const SORT_DIR_OPTIONS = [
 ];
 
 export default function SheetHistoryPage() {
-  const [source, setSource] = useState("");
+  // Metadata from /options
+  const [sources, setSources] = useState<string[]>([]);
+  const [columns, setColumns] = useState<string[]>([]);
+  const [distinct, setDistinct] = useState<Record<string, string[]>>({});
 
+  // Form state
+  const [source, setSource] = useState("");
   const [search, setSearch] = useState("");
   const [filterColumn, setFilterColumn] = useState("");
   const [filterValue, setFilterValue] = useState("");
-  const [dateColumn, setDateColumn] = useState("");
   const [from, setFrom] = useState<Date | undefined>(undefined);
   const [to, setTo] = useState<Date | undefined>(undefined);
   const [sortBy, setSortBy] = useState("");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [limit, setLimit] = useState(200);
 
+  // Request state
   const [page, setPage] = useState(1);
   const [resp, setResp] = useState<SheetReadResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMeta, setLoadingMeta] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const columns = resp?.columns ?? [];
   const rows = resp?.data ?? [];
+  const totalPages = resp?.totalPages ?? 0;
+
+  // Load the sources list once.
+  const loadSources = useCallback(async () => {
+    setLoadingMeta(true);
+    try {
+      const opt: SheetOptionsResponse = await sheetReaderApi.options();
+      if (opt.success) {
+        setSources(opt.sources ?? []);
+      } else {
+        toast.error("Could not load sources", { description: opt.error });
+      }
+    } catch (err: any) {
+      if (err.message !== "Request cancelled") {
+        toast.error("Network Error", { description: "Failed to load sheet sources." });
+      }
+    } finally {
+      setLoadingMeta(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSources();
+  }, [loadSources]);
+
+  // When a source is chosen, load its columns + distinct values.
+  const loadSourceMeta = useCallback(async (src: string) => {
+    if (!src) return;
+    try {
+      const opt = await sheetReaderApi.options(src);
+      if (opt.success) {
+        setColumns(opt.columns ?? []);
+        setDistinct(opt.distinct ?? {});
+        // Reset field selections that depend on this source's schema.
+        setFilterColumn("");
+        setFilterValue("");
+        setSortBy("");
+      } else {
+        toast.error("Could not load source metadata", { description: opt.error });
+      }
+    } catch (err: any) {
+      if (err.message !== "Request cancelled") {
+        toast.error("Network Error", { description: "Failed to load source metadata." });
+      }
+    }
+  }, []);
+
+  const onSourceChange = (src: string) => {
+    setSource(src);
+    setResp(null);
+    loadSourceMeta(src);
+  };
 
   const fetchData = useCallback(async () => {
-    if (!source.trim()) {
-      toast.error("Source key is required");
+    if (!source) {
+      toast.error("Source is required");
       return;
     }
     setLoading(true);
     setError(null);
     try {
       const result = await sheetReaderApi.read({
-        source: source.trim(),
+        source,
         search: search.trim() || undefined,
-        filterColumn: filterColumn.trim() || undefined,
-        filterValue: filterValue.trim() || undefined,
-        dateColumn: dateColumn.trim() || undefined,
+        filterColumn: filterColumn || undefined,
+        filterValue: filterValue || undefined,
         from: from ? format(from, "yyyy-MM-dd") : undefined,
         to: to ? format(to, "yyyy-MM-dd") : undefined,
-        sortBy: sortBy.trim() || undefined,
+        sortBy: sortBy || undefined,
         sortDir,
         page,
         limit,
@@ -95,14 +155,17 @@ export default function SheetHistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [source, search, filterColumn, filterValue, dateColumn, from, to, sortBy, sortDir, page, limit]);
+  }, [source, search, filterColumn, filterValue, from, to, sortBy, sortDir, page, limit]);
 
   // Reset to page 1 whenever any filter changes.
   useEffect(() => {
     setPage(1);
-  }, [source, search, filterColumn, filterValue, dateColumn, from, to, sortBy, sortDir, limit]);
+  }, [source, search, filterColumn, filterValue, from, to, sortBy, sortDir, limit]);
 
-  const totalPages = resp?.totalPages ?? 0;
+  const sourceOptions = sources.map((s) => ({ value: s, label: s }));
+  const columnOptions = columns.map((c) => ({ value: c, label: c }));
+  const distinctValues = filterColumn ? (distinct[filterColumn] ?? []) : [];
+  const filterValueOptions = distinctValues.map((v) => ({ value: v, label: v }));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -141,18 +204,18 @@ export default function SheetHistoryPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Source key */}
-            <div className="relative">
-              <Input
-                placeholder="Source key (e.g. leads)"
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                className="pl-9"
-              />
-              <Database className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            </div>
+            {/* Source */}
+            <SelectDropdown
+              options={sourceOptions}
+              value={source}
+              onValueChange={onSourceChange}
+              placeholder={loadingMeta ? "Loading sources…" : "Select source (e.g. leads)"}
+              triggerClassName="w-full"
+              searchable
+              searchPlaceholder="Search sources…"
+            />
 
-            {/* Filters row */}
+            {/* Filters */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div className="relative sm:col-span-2 lg:col-span-1">
                 <Input
@@ -164,24 +227,29 @@ export default function SheetHistoryPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               </div>
 
-              <Input
-                placeholder="Filter column (exact match)"
+              <SelectDropdown
+                options={columnOptions}
                 value={filterColumn}
-                onChange={(e) => setFilterColumn(e.target.value)}
+                onValueChange={(v) => {
+                  setFilterColumn(v);
+                  setFilterValue("");
+                }}
+                placeholder="Filter column"
+                triggerClassName="w-full"
               />
-              <Input
-                placeholder="Filter value"
+
+              <SelectDropdown
+                options={filterValueOptions}
                 value={filterValue}
-                onChange={(e) => setFilterValue(e.target.value)}
+                onValueChange={setFilterValue}
+                placeholder={filterColumn ? "Filter value" : "Pick a column first"}
+                triggerClassName="w-full"
+                disabled={!filterColumn}
+                searchable
+                searchPlaceholder="Search values…"
               />
 
-              <Input
-                placeholder="Date column (YYYY-MM-DD)"
-                value={dateColumn}
-                onChange={(e) => setDateColumn(e.target.value)}
-              />
-
-              {/* From date */}
+              {/* From date (fixed `timestamp` column) */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal">
@@ -207,10 +275,12 @@ export default function SheetHistoryPage() {
                 </PopoverContent>
               </Popover>
 
-              <Input
-                placeholder="Sort by column"
+              <SelectDropdown
+                options={columnOptions}
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
+                onValueChange={setSortBy}
+                placeholder="Sort by column"
+                triggerClassName="w-full"
               />
 
               <SelectDropdown
@@ -233,7 +303,7 @@ export default function SheetHistoryPage() {
             <div className="flex justify-end">
               <Button
                 onClick={fetchData}
-                disabled={loading}
+                disabled={loading || !source}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white"
               >
                 <Search className="mr-2 h-4 w-4" /> Fetch History
@@ -260,7 +330,7 @@ export default function SheetHistoryPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {columns.map((c) => (
+                    {resp.columns.map((c) => (
                       <TableHead key={c}>{c}</TableHead>
                     ))}
                   </TableRow>
@@ -268,14 +338,14 @@ export default function SheetHistoryPage() {
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={columns.length || 1} className="text-center text-gray-500 py-8">
+                      <TableCell colSpan={resp.columns.length || 1} className="text-center text-gray-500 py-8">
                         No rows match the current filters.
                       </TableCell>
                     </TableRow>
                   ) : (
                     rows.map((row, i) => (
                       <TableRow key={i}>
-                        {columns.map((c) => (
+                        {resp.columns.map((c) => (
                           <TableCell key={c}>{String(row[c] ?? "")}</TableCell>
                         ))}
                       </TableRow>
