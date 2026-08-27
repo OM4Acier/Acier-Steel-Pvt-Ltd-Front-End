@@ -88,6 +88,7 @@ export const ROUTES = {
   REPORTS:          '/reports',
   INVENTROTY:       '/inventory',
   ACCOUNT:          '/account',
+  SHEET_HISTORY:    '/sheet-history',
   } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];
@@ -225,6 +226,16 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     label:                'Account',
     icon:                 User,
     showInNav:            false,
+  },
+  {
+    path:                 ROUTES.SHEET_HISTORY,
+    allowedRoles:         ['super-admin', 'sales', 'accountant', 'operations'],
+    unauthorizedRedirect: ROUTES.HOME,
+    label:                'Sheet History',
+    icon:                 FileText,
+    navColor:             'sky',
+    showInNav:            true,
+    navOrder:             12,
   },
 ];
 

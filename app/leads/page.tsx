@@ -78,6 +78,7 @@ interface Lead {
 }
 
 import { leadsApi } from '@/lib/api/endpoints/leadsApi';
+import LeadCardV2 from './components/LeadCardV2';
 
 const leadApiService = leadsApi;
 
@@ -518,7 +519,7 @@ export default function LeadManagementPage() {
         </CardHeader>
         <CardContent className="p-4 flex flex-col gap-4">
           {leads.map((lead) => (
-            <LeadCard
+            <><LeadCard
               key={lead.id}
               lead={lead}
               groupColor={color}
@@ -529,6 +530,14 @@ export default function LeadManagementPage() {
               onOpenRescheduleDialog={handleOpenRescheduleDialog}
               onOpenLeadDetailsDialogWithCloseNote={handleOpenLeadDetailsDialogWithCloseNote} // Pass new prop
             />
+            <LeadCardV2
+                key={lead.id}
+                {...lead}
+                onMarkWon={() => alert(`Mark as Won: ${lead.leadId}`)}
+                onSort={() => alert(`Sort / filter: ${lead.leadId}`)}
+                onCall={() => alert(`Call: ${lead.phone}`)}
+                onWhatsApp={() => alert(`WhatsApp: ${lead.phone}`)}
+                onEditReminder={() => alert(`Edit reminder: ${lead.leadId}`)} /></>
           ))}
         </CardContent>
       </Card>
