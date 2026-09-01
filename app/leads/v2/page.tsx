@@ -10,18 +10,18 @@
  * app/leads/page.tsx.
  */
 
-import React from "react";
+import React, { useState } from "react";
 import LeadCardV2, { LeadCardV2Props } from "@/app/leads/components/LeadCardV2";
 
-// --- Dummy data (no API calls) ---
+// --- Dummy data (no API calls). Dates are ISO so the card formatter is exercised. ---
 const DUMMY_LEADS: LeadCardV2Props[] = [
   {
     clientName: "LLOYD INSULATIONS (INDIA) LTD",
     leadId: "LD-00562",
     phone: "8080544232",
     isHot: true,
-    reminderDate: "24 Aug 2026",
-    createdDate: "22 Aug 2026",
+    reminderDate: "2026-08-24",
+    createdDate: "2026-08-22",
     createdByName: "Mayur",
   },
   {
@@ -29,8 +29,8 @@ const DUMMY_LEADS: LeadCardV2Props[] = [
     leadId: "LD-00562",
     phone: "8080544232",
     isHot: false,
-    reminderDate: "24 Aug 2026",
-    createdDate: "22 Aug 2026",
+    reminderDate: "2026-08-24",
+    createdDate: "2026-08-22",
     createdByName: "Mayur",
   },
   {
@@ -38,8 +38,8 @@ const DUMMY_LEADS: LeadCardV2Props[] = [
     leadId: "LD-00741",
     phone: "9820123400",
     isHot: false,
-    reminderDate: "28 Aug 2026",
-    createdDate: "20 Aug 2026",
+    reminderDate: "2026-08-28",
+    createdDate: "2026-08-20",
     createdByName: "Rohit",
   },
   {
@@ -47,13 +47,18 @@ const DUMMY_LEADS: LeadCardV2Props[] = [
     leadId: "LD-00813",
     phone: "9123456789",
     isHot: true,
-    reminderDate: "30 Aug 2026",
-    createdDate: "19 Aug 2026",
+    reminderDate: "2026-08-30",
+    createdDate: "2026-08-19",
     createdByName: "Priya",
   },
 ];
 
 export default function LeadsV2Page() {
+  // Track hot state per lead so the flame toggle (and the dropdown's toggle) persists.
+  const [hotState, setHotState] = useState<Record<number, boolean>>(
+    Object.fromEntries(DUMMY_LEADS.map((l, i) => [i, l.isHot ?? false]))
+  );
+
   return (
     <div className="min-h-screen bg-black p-8">
       <div className="mx-auto max-w-[860px]">
@@ -65,8 +70,9 @@ export default function LeadsV2Page() {
             <LeadCardV2
               key={`${lead.leadId}-${i}`}
               {...lead}
+              isHot={hotState[i]}
+              onToggleHot={(next) => setHotState((s) => ({ ...s, [i]: next }))}
               onMarkWon={() => alert(`Mark as Won: ${lead.leadId}`)}
-              onSort={() => alert(`Sort / filter: ${lead.leadId}`)}
               onCall={() => alert(`Call: ${lead.phone}`)}
               onWhatsApp={() => alert(`WhatsApp: ${lead.phone}`)}
               onEditReminder={() => alert(`Edit reminder: ${lead.leadId}`)}
