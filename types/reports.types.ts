@@ -92,3 +92,16 @@ export interface ReportResponse {
   data: ReportData;
   error?: string;
 }
+
+/**
+ * Date-range response shape for GET /api/leads/report/daily?start=&end=
+ * `data` is keyed by IST date (YYYY-MM-DD), one array per day.
+ */
+export interface ReportRangeResponse {
+  success: boolean;
+  start: string;
+  end: string;
+  days: number;
+  data: Record<string, ReportData[]>;
+  error?: string;
+}

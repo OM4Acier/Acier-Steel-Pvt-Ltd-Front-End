@@ -14,7 +14,7 @@ import { NavbarExtension } from '@/context/NavbarExtensionContext';
 import { NavButton } from '@/components/NavButton';
 
 import { reportsApi } from '@/lib/api/endpoints/reportsApi';
-import { ReportData } from '@/types/reports.types';
+import { ReportData, ReportRangeResponse } from '@/types/reports.types';
 
 // Helper to get styling class for productivity score
 const getScoreClass = (score: number) => {
@@ -24,11 +24,17 @@ const getScoreClass = (score: number) => {
   return 'text-red-500 font-bold';
 };
 
+type ReportMode = 'single' | 'range';
+
 export default function ReportPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [rangeData, setRangeData] = useState<ReportRangeResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportMode, setReportMode] = useState<ReportMode>('single');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate, setEndDate] = useState<Date | undefined>();
   const [searchUserId, setSearchUserId] = useState<string>('');
   const [currentUserIdFilter, setCurrentUserIdFilter] = useState<string>(''); // Actual filter applied after search
 
@@ -39,6 +45,7 @@ export default function ReportPage() {
     setLoading(true);
     setError(null);
     setReportData(null); // Clear previous data
+    setRangeData(null);
     
     // toast.message is better for non-error notifications
     toast.info('Fetching Report...', {
@@ -72,9 +79,52 @@ export default function ReportPage() {
     }
   }, [selectedDate, currentUserIdFilter]);
 
+  // Function to fetch a date-range report
+  const fetchRangeReport = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setReportData(null);
+    setRangeData(null);
+
+    toast.info('Fetching Report...', {
+      description: 'Please wait while we retrieve the latest data.',
+    });
+
+    try {
+      const start = startDate ? format(startDate, 'yyyy-MM-dd') : '';
+      const end = endDate ? format(endDate, 'yyyy-MM-dd') : '';
+
+      const result = await reportsApi.getDailyReportRange(start, end, currentUserIdFilter || undefined);
+
+      if (result.success) {
+        setRangeData(result);
+        toast.success('Report Loaded Successfully', {
+          description: `Data from ${result.start} to ${result.end} loaded.`,
+        });
+      } else {
+        const errorMessage = result.error || 'Failed to fetch report.';
+        setError(errorMessage);
+        toast.error('Error Loading Report', { description: errorMessage });
+      }
+    } catch (err: any) {
+      if (err.message === 'Request cancelled') return;
+      console.error('API Error:', err);
+      setError(err.message || 'A network error occurred. Please try again.');
+      toast.error('Network Error', {
+        description: 'Could not connect to the API. Check your internet connection.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [startDate, endDate, currentUserIdFilter]);
+
 
   const handleRefresh = () => {
-    fetchDailyReport();
+    if (reportMode === 'range') {
+      fetchRangeReport();
+    } else {
+      fetchDailyReport();
+    }
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -93,9 +143,13 @@ export default function ReportPage() {
     
   useEffect(() => {
     if (clerkLoaded && clerkUser) {
-      fetchDailyReport();
+      if (reportMode === 'range') {
+        fetchRangeReport();
+      } else {
+        fetchDailyReport();
+      }
     }
-  }, [clerkUser, clerkLoaded, fetchDailyReport]);
+  }, [clerkUser, clerkLoaded, reportMode, fetchDailyReport, fetchRangeReport]);
 
 
   return (
@@ -130,10 +184,10 @@ export default function ReportPage() {
         </Card>
       )}
 
-      {!loading && !error && !reportData && (
+      {!loading && !error && !reportData && !rangeData && (
         <Card className="mb-6 border-gray-400 border-2 bg-gray-50 shadow-lg rounded-xl">
           <CardContent className="p-6 text-center text-gray-600 text-lg">
-            No report data available for the selected date. Please select a date or refresh.
+            No report data available for the selected date(s). Please select a date or refresh.
           </CardContent>
         </Card>
       )}
@@ -142,26 +196,94 @@ export default function ReportPage() {
 
           {/* Centralized Actions */}
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-            {/* Date Picker */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={'outline'}
-                  className="w-full sm:w-[240px] justify-start text-left font-normal rounded-lg shadow-sm"
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
-                  {selectedDate ? format(selectedDate, 'PPP') : <span>Pick a date</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <BasicCalendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            {/* Report Mode Toggle: Single / Range */}
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <Button
+                variant={reportMode === 'single' ? 'default' : 'outline'}
+                size="sm"
+                className="rounded-md text-xs font-medium"
+                onClick={() => setReportMode('single')}
+              >
+                Single
+              </Button>
+              <Button
+                variant={reportMode === 'range' ? 'default' : 'outline'}
+                size="sm"
+                className="rounded-md text-xs font-medium"
+                onClick={() => setReportMode('range')}
+              >
+                Date Range
+              </Button>
+            </div>
+
+            {/* Date Picker — Single mode */}
+            {reportMode === 'single' && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={'outline'}
+                    className="w-full sm:w-[240px] justify-start text-left font-normal rounded-lg shadow-sm"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
+                    {selectedDate ? format(selectedDate, 'PPP') : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <BasicCalendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
+
+            {/* Date Pickers — Range mode */}
+            {reportMode === 'range' && (
+              <>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={'outline'}
+                      className="w-full sm:w-[200px] justify-start text-left font-normal rounded-lg shadow-sm"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
+                      {startDate ? format(startDate, 'PPP') : <span>Start date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <BasicCalendar
+                      mode="single"
+                      selected={startDate}
+                      onSelect={setStartDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={'outline'}
+                      className="w-full sm:w-[200px] justify-start text-left font-normal rounded-lg shadow-sm"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
+                      {endDate ? format(endDate, 'PPP') : <span>End date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <BasicCalendar
+                      mode="single"
+                      selected={endDate}
+                      onSelect={setEndDate}
+                      initialFocus
+                      disabled={(date: Date) => startDate ? date < startDate : false}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </>
+            )}
 
             {/* User Search Input */}
             <form onSubmit={handleSearchSubmit} className="relative w-full sm:w-auto">
@@ -408,6 +530,122 @@ export default function ReportPage() {
           </div>
         )}
 
+        {rangeData && (
+          <div className="space-y-6">
+            {/* Range Summary Header */}
+            <Card className="rounded-xl shadow-lg p-4">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-gray-600" /> Date Range Report
+                </CardTitle>
+                <CardDescription className="text-sm text-gray-500">
+                  {rangeData.start} → {rangeData.end} ({rangeData.days} days)
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            {/* Per-Day Summary Table */}
+            <Card className="rounded-xl shadow-lg p-4">
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold">Daily Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table className="min-w-full">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Users</TableHead>
+                        <TableHead>New Leads</TableHead>
+                        <TableHead>Completed</TableHead>
+                        <TableHead>Overdue</TableHead>
+                        <TableHead>Completion Rate</TableHead>
+                        <TableHead>Avg Productivity</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.keys(rangeData.data)
+                        .sort()
+                        .map((dateKey) => {
+                          const dayReports = rangeData.data[dateKey];
+                          const totalNewLeads = dayReports.reduce((sum, r) => sum + r.organizationMetrics.daily.newLeads, 0);
+                          const totalCompleted = dayReports.reduce((sum, r) => sum + r.organizationMetrics.daily.completed, 0);
+                          const totalOverdue = dayReports.reduce((sum, r) => sum + r.organizationMetrics.daily.overdue, 0);
+                          const totalUsers = dayReports.reduce((sum, r) => sum + r.organizationMetrics.daily.totalUsers, 0);
+                          const avgScore = dayReports.length > 0
+                            ? dayReports.reduce((sum, r) =>
+                                sum + r.organizationMetrics.performance.avgProductivityScore, 0) / dayReports.length
+                            : 0;
+                          const completionRate = totalNewLeads > 0
+                            ? ((totalCompleted / totalNewLeads) * 100).toFixed(1)
+                            : '0.0';
+
+                          return (
+                            <TableRow key={dateKey}>
+                              <TableCell className="font-medium">{dateKey}</TableCell>
+                              <TableCell>{totalUsers}</TableCell>
+                              <TableCell>{totalNewLeads}</TableCell>
+                              <TableCell>{totalCompleted}</TableCell>
+                              <TableCell className={totalOverdue > 0 ? 'text-red-600 font-bold' : ''}>{totalOverdue}</TableCell>
+                              <TableCell>{completionRate}%</TableCell>
+                              <TableCell>{avgScore.toFixed(0)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Full Report Cards per day */}
+            {Object.keys(rangeData.data)
+              .sort()
+              .map((dateKey) =>
+                rangeData.data[dateKey].map((report) => (
+                  <Card key={`${dateKey}-${report.reportDate}`} className="rounded-xl shadow-lg p-4">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                        <Building className="w-4 h-4 text-gray-600" />
+                        {report.reportDate} — {report.userReports.length} users
+                      </CardTitle>
+                      <CardDescription className="text-sm text-gray-500">
+                        Generated At: {new Date(report.generatedAt).toLocaleTimeString()}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <Card className="p-3 bg-blue-50 border-blue-200 rounded-lg">
+                          <CardTitle className="text-sm font-medium text-blue-800">New Leads</CardTitle>
+                          <CardDescription className="text-2xl font-bold text-blue-900 mt-1">
+                            {report.organizationMetrics.daily.newLeads}
+                          </CardDescription>
+                        </Card>
+                        <Card className="p-3 bg-green-50 border-green-200 rounded-lg">
+                          <CardTitle className="text-sm font-medium text-green-800">Completed</CardTitle>
+                          <CardDescription className="text-2xl font-bold text-green-900 mt-1">
+                            {report.organizationMetrics.daily.completed}
+                          </CardDescription>
+                        </Card>
+                        <Card className="p-3 bg-red-50 border-red-200 rounded-lg">
+                          <CardTitle className="text-sm font-medium text-red-800">Overdue</CardTitle>
+                          <CardDescription className="text-2xl font-bold text-red-900 mt-1">
+                            {report.organizationMetrics.daily.overdue}
+                          </CardDescription>
+                        </Card>
+                        <Card className="p-3 bg-indigo-50 border-indigo-200 rounded-lg">
+                          <CardTitle className="text-sm font-medium text-indigo-800">Avg Score</CardTitle>
+                          <CardDescription className="text-2xl font-bold text-indigo-900 mt-1">
+                            {report.organizationMetrics.performance.avgProductivityScore.toFixed(0)}
+                          </CardDescription>
+                        </Card>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )),
+              )}
+          </div>
+        )}
       </main>
     </div>
   );
