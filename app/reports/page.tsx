@@ -3,7 +3,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
-import { RefreshCcw, Building, TrendingUp, AlertTriangle, User, Star, CalendarIcon, Search } from 'lucide-react';
+import { RefreshCcw, Building, CalendarIcon, Search, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
@@ -14,20 +14,16 @@ import { NavbarExtension } from '@/context/NavbarExtensionContext';
 import { NavButton } from '@/components/NavButton';
 
 import { reportsApi } from '@/lib/api/endpoints/reportsApi';
-import { ReportData, ReportRangeResponse, LeadCountEntry } from '@/types/reports.types';
-
-// Helper to get styling class for productivity score
-const getScoreClass = (score: number) => {
-  if (score >= 80) return 'text-green-500 font-bold';
-  if (score >= 50) return 'text-blue-500';
-  if (score >= 20) return 'text-yellow-500';
-  return 'text-red-500 font-bold';
-};
+import { ReportResponse, ReportRangeResponse, LeadCountEntry } from '@/types/reports.types';
 
 type ReportMode = 'single' | 'range';
 
+// Normalize: backend may return an array or a single object per date key
+const normalizeEntries = (raw: LeadCountEntry[] | LeadCountEntry): LeadCountEntry[] =>
+  Array.isArray(raw) ? raw : [raw];
+
 export default function ReportPage() {
-  const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [reportData, setReportData] = useState<ReportResponse | null>(null);
   const [rangeData, setRangeData] = useState<ReportRangeResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,27 +36,26 @@ export default function ReportPage() {
 
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
 
-  // Function to fetch daily report data
+  // Function to fetch daily report data (single date)
   const fetchDailyReport = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setReportData(null); // Clear previous data
+    setReportData(null);
     setRangeData(null);
-    
-    // toast.message is better for non-error notifications
+
     toast.info('Fetching Report...', {
       description: 'Please wait while we retrieve the latest data.',
     });
 
     try {
       const formattedDate = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
-      
+
       const result = await reportsApi.getDailyReport(formattedDate, currentUserIdFilter || undefined);
 
       if (result.success) {
-        setReportData(result.data);
+        setReportData(result);
         toast.success('Report Loaded Successfully', {
-          description: `Data for ${formattedDate} loaded.`,
+          description: `Data for ${result.date} loaded.`,
         });
       } else {
         const errorMessage = result.error || 'Failed to fetch report.';
@@ -118,7 +113,6 @@ export default function ReportPage() {
     }
   }, [startDate, endDate, currentUserIdFilter]);
 
-
   const handleRefresh = () => {
     if (reportMode === 'range') {
       fetchRangeReport();
@@ -132,15 +126,6 @@ export default function ReportPage() {
     setCurrentUserIdFilter(searchUserId); // Apply filter on search submit
   };
 
-  // Calculate Daily KPIs
-  const dailyCompletionRate = reportData && reportData.organizationMetrics.daily.newLeads > 0
-    ? ((reportData.organizationMetrics.daily.completed / reportData.organizationMetrics.daily.newLeads) * 100).toFixed(1)
-    : '0.0';
-  const dailyFollowUpCompliance = reportData && (reportData.organizationMetrics.daily.remindersToday + reportData.organizationMetrics.daily.overdue) > 0
-    ? ((reportData.organizationMetrics.daily.remindersToday / (reportData.organizationMetrics.daily.remindersToday + reportData.organizationMetrics.daily.overdue)) * 100).toFixed(1)
-    : '0.0';
-
-    
   useEffect(() => {
     if (clerkLoaded && clerkUser) {
       if (reportMode === 'range') {
@@ -151,7 +136,6 @@ export default function ReportPage() {
     }
   }, [clerkUser, clerkLoaded, reportMode, fetchDailyReport, fetchRangeReport]);
 
-
   return (
     <div className="min-h-screen bg-gray-50 ">
       <NavbarExtension >
@@ -160,9 +144,7 @@ export default function ReportPage() {
                   onClick={handleRefresh}
                   isLoading={loading}
                 />
-      
       </NavbarExtension>
-
 
       {loading && (
         <Card className="mb-6 border-blue-400 border-2 bg-blue-50 shadow-lg animate-pulse rounded-xl">
@@ -268,8 +250,8 @@ export default function ReportPage() {
                       variant={'outline'}
                       className="w-full sm:w-[200px] justify-start text-left font-normal rounded-lg shadow-sm"
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
-                      {endDate ? format(endDate, 'PPP') : <span>End date</span>}
+                    <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
+                    {endDate ? format(endDate, 'PPP') : <span>End date</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
@@ -300,225 +282,54 @@ export default function ReportPage() {
             </form>
           </div>
         </div>
+
+        {/* Single-Day Report */}
         {reportData && (
           <div className="space-y-6">
-            {/* Organization Metrics */}
+            {/* Report Header */}
             <Card className="rounded-xl shadow-lg p-4">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                  <Building className="w-5 h-5 text-gray-600" /> Organization Overview
+                  <Building className="w-5 h-5 text-gray-600" /> Daily Lead Report
                 </CardTitle>
                 <CardDescription className="text-sm text-gray-500">
-                  Report Date: {reportData.reportDate} | Generated At: {new Date(reportData.generatedAt).toLocaleTimeString()}
+                  Date: {reportData.date}
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-                  <Card className="p-4 bg-blue-50 border-blue-200 rounded-lg">
-                    <CardTitle className="text-lg font-medium text-blue-800">Total Users</CardTitle>
-                    <CardDescription className="text-3xl font-bold text-blue-900 mt-2">
-                      {reportData.organizationMetrics.daily.totalUsers}
-                    </CardDescription>
-                  </Card>
-                  <Card className="p-4 bg-purple-50 border-purple-200 rounded-lg">
-                    <CardTitle className="text-lg font-medium text-purple-800">Active Users (Daily)</CardTitle>
-                    <CardDescription className="text-3xl font-bold text-purple-900 mt-2">
-                      {reportData.organizationMetrics.daily.activeUsers}
-                    </CardDescription>
-                  </Card>
-                  <Card className="p-4 bg-blue-50 border-blue-200 rounded-lg">
-                    <CardTitle className="text-lg font-medium text-blue-800">New Leads (Daily)</CardTitle>
-                    <CardDescription className="text-3xl font-bold text-blue-900 mt-2">
-                      {reportData.organizationMetrics.daily.newLeads}
-                    </CardDescription>
-                  </Card>
-                  <Card className="p-4 bg-green-50 border-green-200 rounded-lg">
-                    <CardTitle className="text-lg font-medium text-green-800">Completed (Daily)</CardTitle>
-                    <CardDescription className="text-3xl font-bold text-green-900 mt-2">
-                      {reportData.organizationMetrics.daily.completed}
-                    </CardDescription>
-                  </Card>
-                  <Card className="p-4 bg-yellow-50 border-yellow-200 rounded-lg">
-                    <CardTitle className="text-lg font-medium text-yellow-800">Reminders (Daily)</CardTitle>
-                    <CardDescription className="text-3xl font-bold text-yellow-900 mt-2">
-                      {reportData.organizationMetrics.daily.remindersToday}
-                    </CardDescription>
-                  </Card>
-                  <Card className="p-4 bg-red-50 border-red-200 rounded-lg">
-                    <CardTitle className="text-lg font-medium text-red-800">Overdue (Daily)</CardTitle>
-                    <CardDescription className="text-3xl font-bold text-red-900 mt-2">
-                      {reportData.organizationMetrics.daily.overdue}
-                    </CardDescription>
-                  </Card>
-                </div>
-              </CardContent>
             </Card>
 
-            {/* Key Performance Indicators */}
+            {/* Lead Count Table */}
             <Card className="rounded-xl shadow-lg p-4">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                  <Star className="w-5 h-5 text-gray-600" /> Key Performance Indicators
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-                  <Card className="p-4 bg-indigo-50 border-indigo-200 rounded-lg">
-                    <CardTitle className="text-lg font-medium text-indigo-800">Daily Completion Rate</CardTitle>
-                    <CardDescription className="text-3xl font-bold text-indigo-900 mt-2">
-                      {dailyCompletionRate}%
-                    </CardDescription>
-                  </Card>
-                  <Card className="p-4 bg-cyan-50 border-cyan-200 rounded-lg">
-                    <CardTitle className="text-lg font-medium text-cyan-800">Daily Follow-up Compliance</CardTitle>
-                    <CardDescription className="text-3xl font-bold text-cyan-900 mt-2">
-                      {dailyFollowUpCompliance}%
-                    </CardDescription>
-                  </Card>
-                </div>
-              </CardContent>
-            </Card>
-
-
-            {/* Business Intelligence Insights & Trends */}
-            <Card className="rounded-xl shadow-lg p-4">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-gray-600" /> Business Insights & Trends
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h3 className="font-semibold text-lg text-gray-700 mb-2 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-yellow-600" /> Alerts
-                  </h3>
-                  <ul className="list-disc list-inside text-gray-600 space-y-1">
-                    {reportData.insights.alerts.highOverdue > 0 && (
-                      <li className="text-red-600">
-                        <strong>{reportData.insights.alerts.highOverdue} users</strong> with high overdue items!
-                      </li>
-                    )}
-                    {reportData.insights.alerts.lowProductivity > 0 && (
-                      <li className="text-orange-600">
-                        <strong>{reportData.insights.alerts.lowProductivity} users</strong> with low productivity.
-                      </li>
-                    )}
-                    {reportData.insights.alerts.excellentPerformance > 0 && (
-                      <li className="text-green-600">
-                        <strong>{reportData.insights.alerts.excellentPerformance} users</strong> showing excellent performance!
-                      </li>
-                    )}
-                    {reportData.insights.alerts.missedFollowUps > 0 && (
-                      <li className="text-red-600">
-                        <strong>{reportData.insights.alerts.missedFollowUps} total</strong> overdue follow-ups across organization.
-                      </li>
-                    )}
-                    {reportData.insights.alerts.highOverdue === 0 && reportData.insights.alerts.lowProductivity === 0 && reportData.insights.alerts.excellentPerformance === 0 && reportData.insights.alerts.missedFollowUps === 0 && (
-                      <li>No critical alerts today.</li>
-                    )}
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg text-gray-700 mb-2 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-blue-600" /> Daily Trends
-                  </h3>
-                  <ul className="list-disc list-inside text-gray-600 space-y-1">
-                    <li>Daily Leads Velocity: <strong>{reportData.insights.trends.dailyVelocity.toFixed(2)}</strong> leads/active user</li>
-                    <li>Completion Velocity: <strong>{reportData.insights.trends.completionVelocity.toFixed(2)}</strong> completions/active user</li>
-                    <li>Estimated Monthly New Leads: <strong>{reportData.insights.trends.monthlyProjection.estimatedNewLeads.toLocaleString()}</strong></li>
-                    <li>Estimated Monthly Completions: <strong>{reportData.insights.trends.monthlyProjection.estimatedCompletions.toLocaleString()}</strong></li>
-                  </ul>
-                </div>
-                <div className="md:col-span-2">
-                  <h3 className="font-semibold text-lg text-gray-700 mb-2 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-green-600" /> Recommendations
-                  </h3>
-                  {reportData.insights.recommendations.length > 0 ? (
-                    <ul className="list-disc list-inside text-gray-600 space-y-1">
-                      {reportData.insights.recommendations.map((rec, index) => (
-                        <li key={index}>{rec}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-gray-500">No specific recommendations generated for today.</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Top Performer Highlight */}
-            {reportData.organizationMetrics.performance.topPerformer && (
-              <Card className="rounded-xl shadow-lg bg-yellow-50 border-yellow-200 p-4">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xl font-semibold flex items-center gap-2 text-yellow-800">
-                    <Star className="w-6 h-6 text-yellow-600 fill-yellow-600" /> Top Performer Today!
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4">
-                  <div className="flex items-center gap-3">
-                    <User className="w-10 h-10 text-yellow-700 bg-yellow-200 p-2 rounded-full" />
-                    <div>
-                      <p className="text-xl font-bold text-yellow-900">{reportData.organizationMetrics.performance.topPerformer.userName}</p>
-                      <p className="text-md text-yellow-700">Productivity Score: <span className="font-bold">{reportData.organizationMetrics.performance.topPerformer.performanceMetrics.productivityScore.toFixed(0)}</span></p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-yellow-800 text-sm">
-                    <p><span className="font-semibold">New Leads:</span> {reportData.organizationMetrics.performance.topPerformer.dailyMetrics.newLeads}</p>
-                    <p><span className="font-semibold">Completed:</span> {reportData.organizationMetrics.performance.topPerformer.dailyMetrics.completed}</p>
-                    <p><span className="font-semibold">Overdue:</span> {reportData.organizationMetrics.performance.topPerformer.dailyMetrics.overdueFollowUps}</p>
-                    <p><span className="font-semibold">Conversion Rate (M):</span> {reportData.organizationMetrics.performance.topPerformer.monthlyMetrics.conversionRate.toFixed(1)}%</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* User Performance Table */}
-            <Card className="rounded-xl shadow-lg p-4">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                  <User className="w-5 h-5 text-gray-600" /> Team Performance
-                </CardTitle>
-                <CardDescription className="text-sm text-gray-500">Ranked by Productivity Score</CardDescription>
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold">Leads by User</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
                   <Table className="min-w-full">
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Rank</TableHead>
+                        <TableHead>#</TableHead>
                         <TableHead>User</TableHead>
-                        <TableHead>Productivity Score</TableHead>
-                        <TableHead>New Leads (Daily)</TableHead>
-                        <TableHead>Completed (Daily)</TableHead>
-                        <TableHead>Overdue (Daily)</TableHead>
-                        <TableHead>Conv. Rate (Monthly)</TableHead>
-                        <TableHead>Follow-up Compliance</TableHead>
+                        <TableHead>User ID</TableHead>
+                        <TableHead>Leads Count</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {reportData.userReports.length > 0 ? (
-                        reportData.userReports.map((user) => (
-                          <TableRow key={user.userId}>
-                            <TableCell className="font-medium">{user.rank}</TableCell>
-                            <TableCell>{user.userName}</TableCell>
-                            <TableCell>
-                              <span className={`${getScoreClass(user.performanceMetrics.productivityScore)}`}>
-                                {user.performanceMetrics.productivityScore.toFixed(0)}
-                              </span>
-                            </TableCell>
-                            <TableCell>{user.dailyMetrics.newLeads}</TableCell>
-                            <TableCell>{user.dailyMetrics.completed}</TableCell>
-                            <TableCell className={user.dailyMetrics.overdueFollowUps > 0 ? 'text-red-600 font-bold' : ''}>
-                              {user.dailyMetrics.overdueFollowUps}
-                            </TableCell>
-                            <TableCell>{user.monthlyMetrics.conversionRate.toFixed(1)}%</TableCell>
-                            <TableCell>{user.performanceMetrics.followUpCompliance.toFixed(1)}%</TableCell>
-                          </TableRow>
-                        ))
+                      {reportData.data.length > 0 ? (
+                        reportData.data
+                          .sort((a, b) => b.count - a.count)
+                          .map((entry, idx) => (
+                            <TableRow key={`${entry.createdBy}-${idx}`}>
+                              <TableCell className="font-medium">{idx + 1}</TableCell>
+                              <TableCell className="font-medium">{entry.createdByName || entry.createdBy}</TableCell>
+                              <TableCell className="text-sm text-gray-500">{entry.createdBy}</TableCell>
+                              <TableCell className="font-bold text-blue-600">{entry.count}</TableCell>
+                            </TableRow>
+                          ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center text-gray-500 py-4">
-                            No user performance data available.
+                          <TableCell colSpan={4} className="text-center text-gray-500 py-4">
+                            No lead data for this date.
                           </TableCell>
                         </TableRow>
                       )}
@@ -530,25 +341,18 @@ export default function ReportPage() {
           </div>
         )}
 
+        {/* Date-Range Report */}
         {rangeData && (() => {
-          // Flatten all dates into rows; normalize single-object-per-date to array
-          const rows: Array<{ date: string; createdBy: string; createdByName: string; count: number }> = [];
-          Object.keys(rangeData.data)
+          // Aggregate per-day totals
+          const dayTotals = Object.keys(rangeData.data)
             .sort()
-            .forEach((dateKey) => {
-              const raw = rangeData.data[dateKey];
-              const dayEntries: LeadCountEntry[] = Array.isArray(raw) ? raw : [raw];
-              dayEntries.forEach((entry) => {
-                rows.push({
-                  date: dateKey,
-                  createdBy: entry.createdBy,
-                  createdByName: entry.createdByName,
-                  count: entry.count,
-                });
-              });
+            .map((dateKey) => {
+              const entries = normalizeEntries(rangeData.data[dateKey]);
+              const total = entries.reduce((sum, e) => sum + e.count, 0);
+              return { date: dateKey, total, users: entries.length };
             });
 
-          const totalLeads = rows.reduce((sum, r) => sum + r.count, 0);
+          const grandTotal = dayTotals.reduce((sum, d) => sum + d.total, 0);
 
           return (
             <div className="space-y-6">
@@ -559,7 +363,7 @@ export default function ReportPage() {
                     <TrendingUp className="w-5 h-5 text-gray-600" /> Date Range Report
                   </CardTitle>
                   <CardDescription className="text-sm text-gray-500">
-                    {rangeData.start} → {rangeData.end} ({rangeData.days} days) · {totalLeads} total leads
+                    {rangeData.start} → {rangeData.end} ({rangeData.days} days) · {grandTotal} total leads
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -580,22 +384,21 @@ export default function ReportPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {Object.keys(rangeData.data)
-                          .sort()
-                          .map((dateKey) => {
-                            const raw = rangeData.data[dateKey];
-                            const dayEntries: LeadCountEntry[] = Array.isArray(raw) ? raw : [raw];
-                            const dayTotal = dayEntries.reduce((sum, e) => sum + e.count, 0);
-                            const activeUsers = dayEntries.length;
-
-                            return (
-                              <TableRow key={dateKey}>
-                                <TableCell className="font-medium">{dateKey}</TableCell>
-                                <TableCell>{dayTotal}</TableCell>
-                                <TableCell>{activeUsers}</TableCell>
-                              </TableRow>
-                            );
-                          })}
+                        {dayTotals.length > 0 ? (
+                          dayTotals.map((d) => (
+                            <TableRow key={d.date}>
+                              <TableCell className="font-medium">{d.date}</TableCell>
+                              <TableCell>{d.total}</TableCell>
+                              <TableCell>{d.users}</TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center text-gray-500 py-4">
+                              No lead data for the selected range.
+                            </TableCell>
+                          </TableRow>
+                        )}
                       </TableBody>
                     </Table>
                   </div>
@@ -614,31 +417,31 @@ export default function ReportPage() {
                         <TableRow>
                           <TableHead>Date</TableHead>
                           <TableHead>User</TableHead>
-                          <TableHead>Leads Created</TableHead>
+                          <TableHead>User ID</TableHead>
+                          <TableHead>Leads Count</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {rows.length > 0 ? (
-                          rows
-                            .sort((a, b) => {
-                              if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-                              return b.count - a.count;
+                        {dayTotals.length > 0 ? (
+                          Object.keys(rangeData.data)
+                            .sort()
+                            .flatMap((dateKey) => {
+                              const entries = normalizeEntries(rangeData.data[dateKey]);
+                              return entries
+                                .sort((a, b) => b.count - a.count)
+                                .map((entry, idx) => ({ ...entry, date: dateKey, idx }));
                             })
-                            .map((row, idx) => (
-                              <TableRow key={`${row.date}-${row.createdBy}-${idx}`}>
+                            .map((row) => (
+                              <TableRow key={`${row.date}-${row.createdBy}-${row.idx}`}>
                                 <TableCell className="font-medium">{row.date}</TableCell>
-                                <TableCell>
-                                  <div className="flex flex-col">
-                                    <span>{row.createdByName || row.createdBy}</span>
-                                    <span className="text-xs text-gray-500">{row.createdBy}</span>
-                                  </div>
-                                </TableCell>
+                                <TableCell>{row.createdByName || row.createdBy}</TableCell>
+                                <TableCell className="text-sm text-gray-500">{row.createdBy}</TableCell>
                                 <TableCell className="font-bold text-blue-600">{row.count}</TableCell>
                               </TableRow>
                             ))
                         ) : (
                           <TableRow>
-                            <TableCell colSpan={3} className="text-center text-gray-500 py-4">
+                            <TableCell colSpan={4} className="text-center text-gray-500 py-4">
                               No lead data for the selected range.
                             </TableCell>
                           </TableRow>
@@ -651,6 +454,7 @@ export default function ReportPage() {
             </div>
           );
         })()}
+
       </main>
     </div>
   );
