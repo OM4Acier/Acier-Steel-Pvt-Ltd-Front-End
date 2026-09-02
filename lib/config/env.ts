@@ -9,7 +9,6 @@
  *
  * requireEnv throws at BUILD time if a var is missing, so the CI/CD pipeline
  * fails loudly instead of shipping a broken app.
- 
 
 function requireEnv(key: string): string {
     const value = process.env[key];
@@ -22,20 +21,22 @@ function requireEnv(key: string): string {
     }
     return value;
   }
-  
+
   function optionalEnv(key: string, fallback: string): string {
     return process.env[key] ?? fallback;
   }
   */
- 
 
   export const env = {
     API_URL:
       process.env.NEXT_PUBLIC_BASE_API_URL || 'http://localhost:5000/api',
-  
+
     ENABLE_API_LOGGING:
       process.env.NEXT_PUBLIC_ENABLE_API_LOGGING === 'true',
 
+    /** Shared secret for authenticated report endpoints (sent via X-Report-Secret header). */
+    REPORT_SECRET:
+      process.env.NEXT_PUBLIC_REPORT_SECRET || '',
   };
-  
+
   export type Env = typeof env;

@@ -1,4 +1,5 @@
 import { apiClient } from '../client';
+import { env } from '@/lib/config/env';
 import { ReportResponse, ReportRangeResponse } from '@/types/reports.types';
 
 /**
@@ -8,14 +9,9 @@ import { ReportResponse, ReportRangeResponse } from '@/types/reports.types';
  *
  * Auth: the frontend authenticates via the Clerk bearer token that the
  * shared apiClient injects automatically (ClerkTokenProvider interceptor).
- * The X-Report-Secret header is NOT sent from the browser — it is a
- * server-to-server secret for Apps Script / backend jobs only. The backend
- * route uses a reportSecretOrUser OR-gate that accepts either the secret
- * header OR a valid Clerk session.
- *
- * See references/daily-lead-report-frontend.md for the full contract:
- *   - Single day:  ?date=YYYY-MM-DD     → { success, date, data: LeadCountEntry[] }
- *   - Date range:  ?start=&end=         → { success, start, end, days, data: Record<string, LeadCountEntry[]> }
+ * The X-Report-Secret header is sent from the browser as a fallback so
+ * the report endpoint can authenticate without a Clerk session (e.g.
+ * from the reports page which may not have a full user context).
  */
 
 export const reportsApi = {
@@ -29,6 +25,7 @@ export const reportsApi = {
 
     const res = await apiClient.get<ReportResponse>('/leads/report/daily', {
       params,
+      headers: { 'X-Report-Secret': env.REPORT_SECRET },
     });
     if (!res) throw new Error('Request cancelled');
     return res;
@@ -49,6 +46,7 @@ export const reportsApi = {
 
     const res = await apiClient.get<ReportRangeResponse>('/leads/report/daily', {
       params,
+      headers: { 'X-Report-Secret': env.REPORT_SECRET },
     });
     if (!res) throw new Error('Request cancelled');
     return res;
