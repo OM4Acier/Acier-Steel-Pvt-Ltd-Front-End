@@ -519,38 +519,64 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   };
 
   const computeHasChanges = (
-    prev: PendingChanges,
+    textFields: PendingChanges['textFields'],
     productFiles: File[],
     vehicleFiles: File[],
     invoiceFiles: File[],
+    productAudioFiles: File[],
+    invoiceAudioFiles: File[],
   ) =>
-    productFiles.length + vehicleFiles.length + invoiceFiles.length > 1 ||
-    Object.keys(prev.textFields).length > 0;
+    productFiles.length +
+      vehicleFiles.length +
+      invoiceFiles.length +
+      productAudioFiles.length +
+      invoiceAudioFiles.length >
+      0 || Object.keys(textFields).length > 0;
 
   const handleFileAdd = (files: File[], stage: 'product' | 'vehicle' | 'invoice') => {
     setPendingChanges((prev) => {
-      const existingFiles = prev[`${stage}Files` as keyof Pick<PendingChanges, 'productFiles' | 'vehicleFiles' | 'invoiceFiles'>] as File[];
+      const stageKey = `${stage}Files` as keyof Pick<PendingChanges, 'productFiles' | 'vehicleFiles' | 'invoiceFiles'>;
+      const existingFiles = prev[stageKey] as File[];
       const newFiles = [...existingFiles, ...files];
       updateMergePreviewForStage(stage, newFiles);
 
+      const hasChanges = computeHasChanges(
+        prev.textFields,
+        stage === 'product' ? newFiles : prev.productFiles,
+        stage === 'vehicle' ? newFiles : prev.vehicleFiles,
+        stage === 'invoice' ? newFiles : prev.invoiceFiles,
+        prev.productAudioFiles,
+        prev.invoiceAudioFiles,
+      );
+
       return {
         ...prev,
-        [`${stage}Files`]: newFiles,
-        hasChanges: computeHasChanges(prev, prev.productFiles, prev.vehicleFiles, prev.invoiceFiles),
+        [stageKey]: newFiles,
+        hasChanges,
       };
     });
   };
 
   const handleFileRemove = (index: number, stage: 'product' | 'vehicle' | 'invoice') => {
     setPendingChanges((prev) => {
-      const existingFiles = prev[`${stage}Files` as keyof Pick<PendingChanges, 'productFiles' | 'vehicleFiles' | 'invoiceFiles'>] as File[];
+      const stageKey = `${stage}Files` as keyof Pick<PendingChanges, 'productFiles' | 'vehicleFiles' | 'invoiceFiles'>;
+      const existingFiles = prev[stageKey] as File[];
       const newFiles = existingFiles.filter((_, i) => i !== index);
       updateMergePreviewForStage(stage, newFiles);
 
+      const hasChanges = computeHasChanges(
+        prev.textFields,
+        stage === 'product' ? newFiles : prev.productFiles,
+        stage === 'vehicle' ? newFiles : prev.vehicleFiles,
+        stage === 'invoice' ? newFiles : prev.invoiceFiles,
+        prev.productAudioFiles,
+        prev.invoiceAudioFiles,
+      );
+
       return {
         ...prev,
-        [`${stage}Files`]: newFiles,
-        hasChanges: computeHasChanges(prev, prev.productFiles, prev.vehicleFiles, prev.invoiceFiles),
+        [stageKey]: newFiles,
+        hasChanges,
       };
     });
   };
@@ -571,16 +597,19 @@ export const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       const stageKey = `${stage}AudioFiles` as 'productAudioFiles' | 'invoiceAudioFiles';
       const newFiles = prev[stageKey].filter((_, i) => i !== index);
 
+      const hasChanges = computeHasChanges(
+        prev.textFields,
+        prev.productFiles,
+        prev.vehicleFiles,
+        prev.invoiceFiles,
+        stage === 'product' ? newFiles : prev.productAudioFiles,
+        stage === 'invoice' ? newFiles : prev.invoiceAudioFiles,
+      );
+
       return {
         ...prev,
         [stageKey]: newFiles,
-        hasChanges:
-          newFiles.length +
-          prev.productFiles.length +
-          prev.vehicleFiles.length +
-          prev.invoiceFiles.length >
-            1 ||
-          Object.keys(prev.textFields).length > 0,
+        hasChanges,
       };
     });
   };

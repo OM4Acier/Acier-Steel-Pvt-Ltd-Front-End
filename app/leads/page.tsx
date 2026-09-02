@@ -533,6 +533,7 @@ export default function LeadManagementPage() {
             <LeadCardV2
                 key={lead.id}
                 {...lead}
+                createdDate={lead.createdAt || ''}
                 onMarkWon={() => alert(`Mark as Won: ${lead.leadId}`)}
                 onSort={() => alert(`Sort / filter: ${lead.leadId}`)}
                 onCall={() => alert(`Call: ${lead.phone}`)}

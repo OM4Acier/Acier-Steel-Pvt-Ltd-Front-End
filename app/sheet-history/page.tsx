@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useCallback, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -9,6 +8,7 @@ import { Calendar as BasicCalendar } from "@/components/ui/basic-calendar";
 import { NavbarExtension } from "@/context/NavbarExtensionContext";
 import { NavButton } from "@/components/NavButton";
 import { SelectDropdown } from "@/components/ui/SelectDropdown";
+import { SheetRowCard } from "./SheetRowCard";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
+  LayoutGrid,
 } from "lucide-react";
 import {
   sheetReaderApi,
@@ -174,39 +175,51 @@ export default function SheetHistoryPage() {
   const filterValueOptions = distinctValues.map((v) => ({ value: v, label: v }));
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="relative min-h-screen">
+      {/* Aurora backdrop */}
+      <div className="aurora-bg" aria-hidden>
+        <div className="aurora-blob aurora-blob-1" />
+        <div className="aurora-blob aurora-blob-2" />
+        <div className="aurora-blob aurora-blob-3" />
+      </div>
+
       <NavbarExtension>
         <NavButton type="refresh" onClick={fetchData} isLoading={loading} />
       </NavbarExtension>
 
-      {loading && (
-        <Card className="mb-6 border-blue-400 border-2 bg-blue-50 shadow-lg animate-pulse rounded-xl">
-          <CardContent className="p-4 flex items-center justify-center text-blue-700 text-lg font-medium">
-            <RefreshCcw className="animate-spin mr-2" /> Loading Sheet History…
-          </CardContent>
-        </Card>
-      )}
+      <main className="relative mx-auto max-w-7xl px-2 py-6 md:px-6">
+        {/* Title */}
+        <div className="mb-6 px-1">
+          <h1 className="graffiti text-3xl md:text-4xl">Sheet History</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Read filtered + paginated rows from a Google Sheet source. Authenticated with your Clerk session.
+          </p>
+        </div>
 
-      {error && (
-        <Card className="mb-6 border-red-400 border-2 bg-red-50 shadow-lg rounded-xl">
-          <CardHeader>
-            <CardTitle className="text-red-700">Error</CardTitle>
-            <CardDescription className="text-red-600">Failed to read sheet.</CardDescription>
-          </CardHeader>
-          <CardContent className="text-red-800">
-            <p>{error}</p>
-          </CardContent>
-        </Card>
-      )}
+        {/* Loading */}
+        {loading && (
+          <div className="glass mb-6 flex items-center justify-center gap-2 rounded-2xl p-5 text-chart-3">
+            <RefreshCcw className="h-5 w-5 animate-spin" />
+            <span className="font-medium">Loading Sheet History…</span>
+          </div>
+        )}
 
-      <main className="max-w-7xl mx-auto px-[2px] py-6 md:px-6 mt-6">
-        <Card className="rounded-xl shadow-lg p-4 mb-6">
+        {/* Error */}
+        {error && (
+          <div className="glass mb-6 rounded-2xl border-destructive/40 p-5">
+            <p className="text-sm font-semibold text-destructive">Error</p>
+            <p className="mt-1 text-sm text-destructive/90">{error}</p>
+          </div>
+        )}
+
+        {/* Filter card (glass) */}
+        <Card className="glass mb-6 rounded-2xl border-0 p-4 shadow-none">
           <CardHeader className="pb-3">
-            <CardTitle className="text-xl font-semibold flex items-center gap-2">
-              <Database className="w-5 h-5 text-gray-600" /> Sheet History
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Database className="h-5 w-5 text-chart-3" /> Filters
             </CardTitle>
-            <CardDescription className="text-sm text-gray-500">
-              Read filtered + paginated rows from a Google Sheet source. Authenticated with your Clerk session.
+            <CardDescription className="text-sm text-muted-foreground">
+              Pick a source, then refine with search, column filters, and a date range.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -222,7 +235,7 @@ export default function SheetHistoryPage() {
             />
 
             {/* Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div className="relative sm:col-span-2 lg:col-span-1">
                 <Input
                   placeholder="Search all columns…"
@@ -230,7 +243,7 @@ export default function SheetHistoryPage() {
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9"
                 />
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               </div>
 
               <SelectDropdown
@@ -310,7 +323,7 @@ export default function SheetHistoryPage() {
               <Button
                 onClick={fetchData}
                 disabled={loading || !source}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                className="bg-chart-3 text-white hover:bg-chart-3/90"
               >
                 <Search className="mr-2 h-4 w-4" /> Fetch History
               </Button>
@@ -318,51 +331,37 @@ export default function SheetHistoryPage() {
           </CardContent>
         </Card>
 
-        {/* Results */}
+        {/* Results as a card grid */}
         {resp && (
-          <Card className="rounded-xl shadow-lg p-4">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="text-lg font-semibold">
+          <Card className="glass rounded-2xl border-0 p-4 shadow-none">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <LayoutGrid className="h-5 w-5 text-chart-3" />
                 {resp.returnedRows} / {resp.totalRows} rows
-                <span className="ml-2 text-sm font-normal text-gray-500">
+                <span className="text-sm font-normal text-muted-foreground">
                   (Source: {resp.source} · Tab: {resp.tab})
                 </span>
               </CardTitle>
-              <CardDescription className="text-sm text-gray-500">
+              <CardDescription className="text-sm text-muted-foreground">
                 Page {resp.page} of {totalPages}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {resp.columns.map((c) => (
-                      <TableHead key={c}>{c}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={resp.columns.length || 1} className="text-center text-gray-500 py-8">
-                        No rows match the current filters.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((row, i) => (
-                      <TableRow key={i}>
-                        {resp.columns.map((c) => (
-                          <TableCell key={c}>{String(row[c] ?? "")}</TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              {rows.length === 0 ? (
+                <p className="py-10 text-center text-muted-foreground">
+                  No rows match the current filters.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {rows.map((row, i) => (
+                    <SheetRowCard key={i} row={row} columns={resp.columns} index={i} />
+                  ))}
+                </div>
+              )}
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-4 mt-4">
+                <div className="mt-6 flex items-center justify-center gap-4">
                   <Button
                     variant="outline"
                     disabled={page <= 1 || loading}
@@ -370,7 +369,7 @@ export default function SheetHistoryPage() {
                   >
                     <ChevronLeft className="h-4 w-4" /> Prev
                   </Button>
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-muted-foreground">
                     {page} / {totalPages}
                   </span>
                   <Button

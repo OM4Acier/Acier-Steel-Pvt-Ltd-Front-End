@@ -128,6 +128,13 @@
   --animate-shimmer-slide: shimmer-slide 1.8s ease-in-out infinite;
   --animate-slow-spin: slow-spin 8s linear infinite;
 
+  /* Aurora / sheet-history theme animations */
+  --animate-aurora-1: aurora-1 20s ease-in-out infinite alternate;
+  --animate-aurora-2: aurora-2 24s ease-in-out infinite alternate;
+  --animate-aurora-3: aurora-3 28s ease-in-out infinite alternate;
+  --animate-float: float 9s ease-in-out infinite alternate;
+  --animate-pop-in: pop-in 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+
   @keyframes shimmer-slide {
     from { transform: translateX(-100%); }
     to { transform: translateX(100%); }
@@ -137,7 +144,150 @@
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
   }
+
+  @keyframes aurora-1 {
+    0%   { transform: translate3d(-12%, -8%, 0) rotate(0deg) scale(1); }
+    100% { transform: translate3d(10%, 6%, 0) rotate(28deg) scale(1.18); }
+  }
+  @keyframes aurora-2 {
+    0%   { transform: translate3d(8%, 10%, 0) rotate(0deg) scale(1.05); }
+    100% { transform: translate3d(-10%, -6%, 0) rotate(-24deg) scale(1.25); }
+  }
+  @keyframes aurora-3 {
+    0%   { transform: translate3d(0%, -12%, 0) rotate(0deg) scale(1); }
+    100% { transform: translate3d(6%, 10%, 0) rotate(18deg) scale(1.15); }
+  }
+  @keyframes float {
+    0%   { transform: translateY(0); }
+    100% { transform: translateY(-12px); }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: scale(0.94) translateY(8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
 }
+
+/* ───────────────────────────────────────────────────────────
+   Sheet-history theme: aurora, glassmorphism, graffiti
+   These are pure CSS utilities layered on top of the existing
+   CSS-variable design tokens so they stay light/dark aware.
+   ─────────────────────────────────────────────────────────── */
+
+/* Aurora backdrop — fixed positioned blobs behind page content */
+.aurora-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 600px at 100% -10%, color-mix(in oklch, var(--chart-2) 22%, transparent), transparent 70%),
+    radial-gradient(900px 500px at -10% 110%, color-mix(in oklch, var(--chart-4) 20%, transparent), transparent 70%);
+}
+.aurora-bg::before,
+.aurora-bg::after,
+.aurora-blob {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.aurora-blob-1 {
+  inset: -10% auto auto -8%;
+  width: 52vw; height: 52vw;
+  background: radial-gradient(circle at 30% 30%, color-mix(in oklch, var(--chart-1) 65%, transparent), transparent 70%);
+  animation: var(--animate-aurora-1);
+}
+.aurora-blob-2 {
+  inset: 8% -12% auto auto;
+  width: 46vw; height: 46vw;
+  background: radial-gradient(circle at 70% 40%, color-mix(in oklch, var(--chart-3) 60%, transparent), transparent 70%);
+  animation: var(--animate-aurora-2);
+}
+.aurora-blob-3 {
+  inset: auto auto -14% 28%;
+  width: 44vw; height: 44vw;
+  background: radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--chart-5) 55%, transparent), transparent 70%);
+  animation: var(--animate-aurora-3);
+}
+.dark .aurora-blob-1,
+.dark .aurora-blob-2,
+.dark .aurora-blob-3 { opacity: 0.42; }
+
+/* Glassmorphism card surface */
+.glass {
+  background: color-mix(in oklch, var(--card) 62%, transparent);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
+  box-shadow:
+    0 8px 32px color-mix(in oklch, var(--foreground) 12%, transparent),
+    inset 0 1px 0 color-mix(in oklch, var(--card-foreground) 12%, transparent);
+}
+.glass-strong {
+  background: color-mix(in oklch, var(--card) 80%, transparent);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
+  box-shadow:
+    0 12px 40px color-mix(in oklch, var(--foreground) 16%, transparent),
+    inset 0 1px 0 color-mix(in oklch, var(--card-foreground) 14%, transparent);
+}
+
+/* Graffiti accent — hand-drawn neon tag used for labels/titles */
+.graffiti {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  background: linear-gradient(
+    92deg,
+    var(--chart-1),
+    var(--chart-4) 38%,
+    var(--chart-3) 68%,
+    var(--chart-5)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 2px 18px color-mix(in oklch, var(--chart-3) 35%, transparent);
+  transform: rotate(-0.6deg);
+}
+.graffiti-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.7rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--card-foreground);
+  background: color-mix(in oklch, var(--chart-3) 22%, transparent);
+  border: 1px dashed color-mix(in oklch, var(--chart-3) 55%, transparent);
+  transform: rotate(-1.2deg);
+}
+
+/* Reusable pop-in for the detail card */
+.pop-in { animation: var(--animate-pop-in); }
+
+/* Sheet card cells: never let URLs / long values overflow the layout */
+.markdown-cell, .markdown-cell * { overflow-wrap: anywhere; word-break: break-word; }
+.markdown-cell a { display: inline-block; max-width: 100%; }
+.sheet-cell-value { overflow-wrap: anywhere; word-break: break-word; }
+
+/* Rich markdown rendered inside sheet cards/dialog — base spacing */
+.markdown-cell > *:first-child { margin-top: 0; }
+.markdown-cell > *:last-child { margin-bottom: 0; }
+.markdown-cell p, .markdown-cell ul, .markdown-cell ol, .markdown-cell blockquote { margin: 0.35rem 0; }
+.markdown-cell a { color: var(--chart-3); text-decoration: underline; text-underline-offset: 2px; }
 
 .fade-out {
   opacity: 0;

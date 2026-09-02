@@ -36,10 +36,6 @@ function requireEnv(key: string): string {
     ENABLE_API_LOGGING:
       process.env.NEXT_PUBLIC_ENABLE_API_LOGGING === 'true',
 
-    /** Shared secret for authenticated report endpoints (sent via X-Report-Secret header). */
-    REPORT_SECRET:
-      process.env.NEXT_PUBLIC_REPORT_SECRET || '',
-
   };
   
   export type Env = typeof env;
