@@ -94,14 +94,16 @@ export interface ReportResponse {
 }
 
 /**
- * Date-range response shape for GET /api/leads/report/daily?start=&end=
- * `data` is keyed by IST date (YYYY-MM-DD), one array per day.
+ * Date-range response shape for GET /api/reports/daily?start=&end=
+ * `data` is keyed by IST date (YYYY-MM-DD). Each value is an array of
+ * per-user report objects for that day. (Some backends return a single
+ * object instead of an array — the page normalizes defensively.)
  */
 export interface ReportRangeResponse {
   success: boolean;
   start: string;
   end: string;
   days: number;
-  data: Record<string, ReportData[]>;
+  data: Record<string, ReportData[] | ReportData>;
   error?: string;
 }

@@ -567,7 +567,9 @@ export default function ReportPage() {
                       {Object.keys(rangeData.data)
                         .sort()
                         .map((dateKey) => {
-                          const dayReports = rangeData.data[dateKey];
+                          // Normalize: backend may return an array or a single report object per date
+                          const raw = rangeData.data[dateKey];
+                          const dayReports: ReportData[] = Array.isArray(raw) ? raw : [raw];
                           const totalNewLeads = dayReports.reduce((sum, r) => sum + r.organizationMetrics.daily.newLeads, 0);
                           const totalCompleted = dayReports.reduce((sum, r) => sum + r.organizationMetrics.daily.completed, 0);
                           const totalOverdue = dayReports.reduce((sum, r) => sum + r.organizationMetrics.daily.overdue, 0);
@@ -601,8 +603,11 @@ export default function ReportPage() {
             {/* Full Report Cards per day */}
             {Object.keys(rangeData.data)
               .sort()
-              .map((dateKey) =>
-                rangeData.data[dateKey].map((report) => (
+              .map((dateKey) => {
+                // Normalize: backend may return an array or a single report object per date
+                const raw = rangeData.data[dateKey];
+                const dayReports: ReportData[] = Array.isArray(raw) ? raw : [raw];
+                return dayReports.map((report) => (
                   <Card key={`${dateKey}-${report.reportDate}`} className="rounded-xl shadow-lg p-4">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-lg font-semibold flex items-center gap-2">
@@ -642,7 +647,7 @@ export default function ReportPage() {
                       </div>
                     </CardContent>
                   </Card>
-                )),
+                ))},
               )}
           </div>
         )}
