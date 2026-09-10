@@ -78,7 +78,7 @@ interface Lead {
 }
 
 import { leadsApi } from '@/lib/api/endpoints/leadsApi';
-import LeadCardV2 from './components/LeadCardV2';
+//import LeadCardV2 from './components/LeadCardV2';
 
 const leadApiService = leadsApi;
 
