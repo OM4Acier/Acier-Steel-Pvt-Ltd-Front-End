@@ -13,12 +13,13 @@ import {
   User as UserIcon, Calendar, CheckCircle, XCircle, Clock, Plus, Edit, Trash2,
   Phone, History, Loader2, Star, MoreVertical, Upload, Flame,
   Eye, X, AlertTriangle, Paperclip, Bell, Download, MessageCircle, PhoneCall,
-  TrendingUp, LayoutGrid,
-  UsersIcon
+  TrendingUp, LayoutGrid, Filter
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { format } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -102,18 +103,6 @@ interface LeadPage {
 // ===========================================================================
 // HELPERS
 // ===========================================================================
-
-const toStartOfDayIso = (dateStr: string): string => {
-  const d = new Date(dateStr);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
-};
-
-const toEndOfDayIso = (dateStr: string): string => {
-  const d = new Date(dateStr);
-  d.setHours(23, 59, 59, 999);
-  return d.toISOString();
-};
 
 // ===========================================================================
 // LeadCard
@@ -311,11 +300,13 @@ export default function LeadManagementPage() {
   const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
   const [showClosingNoteForLead, setShowClosingNoteForLead] = useState<string | null>(null);
 
-  // --- Filters (admin only) ---
-  const [filterStatus, setFilterStatus] = useState<LeadStatus | undefined>();
-  const [filterIsHot, setFilterIsHot] = useState<boolean | undefined>();
+  // --- Filters (client-side) ---
   const [filterStart, setFilterStart] = useState<string | undefined>();
   const [filterEnd, setFilterEnd] = useState<string | undefined>();
+
+  // Debounced date filter values
+  const [rawFilterStart, setRawFilterStart] = useState<string | undefined>();
+  const [rawFilterEnd, setRawFilterEnd] = useState<string | undefined>();
 
   // --- View mode ---
   const [viewMode, setViewMode] = useState<'normal' | 'by-creator'>('normal');
@@ -398,7 +389,7 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
       setIsFetching(false);
     }
   }
-}, [filterStatus, filterIsHot, filterStart, filterEnd, sortBy, sortOrder]);
+}, [filterStart, filterEnd, sortBy, sortOrder]);
 
   // Refetch on filter change (and on initial user load)
   useEffect(() => {
@@ -593,22 +584,25 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
   }, []);
 
   // -------------------------------------------------------------------------
+  // DEBOUNCED FILTER STATE
+  // -------------------------------------------------------------------------
+
+  // Sync raw (immediate) date inputs to debounced values after 300ms idle
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setFilterStart(rawFilterStart);
+      setFilterEnd(rawFilterEnd);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [rawFilterStart, rawFilterEnd]);
+
+  // -------------------------------------------------------------------------
   // DERIVED GROUPS
   // -------------------------------------------------------------------------
 
   // Client-side filtering + sorting — avoids backend round-trips on every filter change
   const filteredAndSortedLeads = useMemo(() => {
     let result = leads;
-
-    // Status filter
-    if (filterStatus) {
-      result = result.filter(l => l.status === filterStatus);
-    }
-
-    // Hot filter
-    if (filterIsHot === true) {
-      result = result.filter(l => l.isHot === true);
-    }
 
     // Date range filter (by createdAt)
     if (filterStart) {
@@ -638,7 +632,7 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
     });
 
     return result;
-  }, [leads, filterStatus, filterIsHot, filterStart, filterEnd, sortBy, sortOrder]);
+  }, [leads, filterStart, filterEnd, sortBy, sortOrder]);
 
   const { newTodayLeads, reminderDueTodayLeads, needsAttentionLeads, upcomingFollowUpsLeads, completedClosedLeads } = useMemo(() => {
     const today = new Date();
@@ -819,7 +813,7 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
     );
   };
 
-  const hasActiveFilters = Boolean(filterStatus || filterIsHot !== undefined || filterStart || filterEnd);
+  const hasActiveFilters = Boolean(filterStart || filterEnd);
 
   // -------------------------------------------------------------------------
   // RENDER
@@ -843,6 +837,139 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
               onClick={() => fetchLeads()}
               isLoading={isFetching}
             />
+
+            {/* Filter icon → Popover with all filter/sort/export options */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-8 rounded-full text-xs gap-1.5 border-gray-300 dark:border-gray-600 bg-white/80 dark:bg-gray-800/80",
+                    hasActiveFilters && "border-blue-500 bg-blue-50/30",
+                  )}
+                >
+                  <Filter className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Filters</span>
+                  {hasActiveFilters && (
+                    <Badge className="bg-blue-600 text-white h-4 w-4 min-w-[16px] p-0 rounded-full flex items-center justify-center text-[10px]">
+                      !
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-80 p-3">
+                <div className="space-y-3 text-sm">
+                  {/* View mode toggle */}
+                  <div className="flex rounded-lg border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('normal')}
+                      className={cn(
+                        'px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1',
+                        viewMode === 'normal'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700',
+                      )}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span>Normal</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('by-creator')}
+                      className={cn(
+                        'px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1 border-l',
+                        viewMode === 'by-creator'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700',
+                      )}
+                    >
+                      <UserIcon className="w-3.5 h-3.5" />
+                      <span>By Creator</span>
+                    </button>
+                  </div>
+
+                  {/* Sort by */}
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortableField)}>
+                    <SelectTrigger className="h-8 text-xs gap-1.5">
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="createdAt">Created Date</SelectItem>
+                      <SelectItem value="updatedAt">Updated Date</SelectItem>
+                      <SelectItem value="clientName">Client Name</SelectItem>
+                      <SelectItem value="status">Status</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Sort order */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSortOrder(o => (o === 'desc' ? 'asc' : 'desc'))}
+                    className="h-8 w-full text-xs gap-1.5"
+                  >
+                    {sortOrder === 'desc' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5 rotate-180" />}
+                    <span>{sortOrder === 'desc' ? 'Descending' : 'Ascending'}</span>
+                  </Button>
+
+                  {/* Date range — calendar picker */}
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Date Range</span>
+                    </label>
+                    <CalendarComponent
+                      mode="range"
+                      selected={{
+                        from: rawFilterStart ? new Date(rawFilterStart) : undefined,
+                        to: rawFilterEnd ? new Date(rawFilterEnd) : undefined,
+                      }}
+                      onSelect={(range) => {
+                        setRawFilterStart(range?.from?.toISOString());
+                        setRawFilterEnd(range?.to?.toISOString());
+                      }}
+                      numberOfMonths={1}
+                      className="rounded-md border"
+                    />
+                  </div>
+
+                  {/* Clear filters */}
+                  {hasActiveFilters && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setFilterStart(undefined);
+                        setFilterEnd(undefined);
+                        setRawFilterStart(undefined);
+                        setRawFilterEnd(undefined);
+                      }}
+                      className="h-8 w-full text-xs gap-1.5"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Clear Filters</span>
+                    </Button>
+                  )}
+
+                  {/* Export */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportLeads}
+                    disabled={isFetching}
+                    className="h-8 w-full text-xs gap-1.5"
+                  >
+                    {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                    <span>Export CSV</span>
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </NavbarExtension>
         {/* Today's Summary Banner */}
@@ -856,143 +983,6 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
             <p><strong>{reminderDueTodayLeads.length}</strong> Reminders Due</p>
             <p><strong>{needsAttentionLeads.length}</strong> Overdue</p>
           </div>
-        </div>
-        {/* Centralized filter toolbar — client-side filtering, no backend round-trips */}
-        <div className="px-4 my-3 flex flex-wrap items-center gap-2.5 text-sm">
-          {/* View mode toggle */}
-          <div className="flex rounded-lg border overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setViewMode('normal')}
-              className={cn(
-                'px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1',
-                viewMode === 'normal'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700',
-              )}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Normal</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('by-creator')}
-              className={cn(
-                'px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1 border-l',
-                viewMode === 'by-creator'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700',
-              )}
-            >
-              <UsersIcon className="w-3.5 h-3.5" />
-              <span>By Creator</span>
-            </button>
-          </div>
-
-          {/* Sort by */}
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortableField)}>
-            <SelectTrigger className="h-8 w-[140px] text-xs gap-1.5">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="createdAt">Created Date</SelectItem>
-              <SelectItem value="updatedAt">Updated Date</SelectItem>
-              <SelectItem value="clientName">Client Name</SelectItem>
-              <SelectItem value="status">Status</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Sort order */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setSortOrder(o => (o === 'desc' ? 'asc' : 'desc'))}
-            className="h-8 text-xs gap-1.5"
-          >
-            {sortOrder === 'desc' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5 rotate-180" />}
-            <span>{sortOrder === 'desc' ? 'Desc' : 'Asc'}</span>
-          </Button>
-
-          {/* Status filter */}
-          <Select
-            value={filterStatus ?? 'all'}
-            onValueChange={(v) => setFilterStatus(v === 'all' ? undefined : (v as LeadStatus))}
-          >
-            <SelectTrigger className="h-8 w-[140px] text-xs gap-1.5">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="In Progress">In Progress</SelectItem>
-              <SelectItem value="Completed">Completed</SelectItem>
-              <SelectItem value="Closed">Closed</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Hot filter */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-1.5">
-                <Switch
-                  checked={filterIsHot === true}
-                  onCheckedChange={(v) => setFilterIsHot(v ? true : undefined)}
-                  className="data-[state=checked]:bg-red-500 h-4 w-7"
-                />
-                <span className="text-xs text-gray-600 dark:text-gray-300">Hot</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent><p>Show hot leads only</p></TooltipContent>
-          </Tooltip>
-
-          {/* Date range */}
-          <div className="flex items-center gap-1">
-            <Calendar className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
-            <Input
-              type="date"
-              className="h-7 text-xs w-[120px]"
-              value={filterStart ? filterStart.slice(0, 10) : ''}
-              onChange={(e) => setFilterStart(e.target.value ? toStartOfDayIso(e.target.value) : undefined)}
-            />
-            <span className="text-xs text-gray-500">–</span>
-            <Input
-              type="date"
-              className="h-7 text-xs w-[120px]"
-              value={filterEnd ? filterEnd.slice(0, 10) : ''}
-              onChange={(e) => setFilterEnd(e.target.value ? toEndOfDayIso(e.target.value) : undefined)}
-            />
-          </div>
-
-          {/* Clear filters */}
-          {hasActiveFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setFilterStatus(undefined);
-                setFilterIsHot(undefined);
-                setFilterStart(undefined);
-                setFilterEnd(undefined);
-              }}
-              className="h-8 text-xs gap-1.5"
-            >
-              <X className="w-3.5 h-3.5" />
-              <span>Clear</span>
-            </Button>
-          )}
-
-          {/* Export */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleExportLeads}
-            disabled={isFetching}
-            className="h-8 text-xs gap-1.5"
-          >
-            {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-            <span>Export</span>
-          </Button>
         </div>
 
         <main className="space-y-8">
