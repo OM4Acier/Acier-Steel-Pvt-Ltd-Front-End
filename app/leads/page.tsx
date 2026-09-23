@@ -319,6 +319,10 @@ export default function LeadManagementPage() {
   // --- View mode ---
   const [viewMode, setViewMode] = useState<'normal' | 'by-creator'>('normal');
 
+  // --- Sorting ---
+  const [sortBy, setSortBy] = useState<SortableField>('createdAt');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+
   // --- Abort controller for in-flight fetches ---
   const abortRef = useRef<AbortController | null>(null);
 
@@ -367,6 +371,8 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
       const result: LeadPage = await leadApiService.fetchLeads({
         limit: PAGE_SIZE,
         cursor,
+        sort: sortBy,
+        order: sortOrder,
         ...(filterStatus ? { status: filterStatus } : {}),
         ...(filterIsHot !== undefined ? { isHot: filterIsHot } : {}),
         ...(filterStart ? { start: filterStart } : {}),
@@ -399,13 +405,54 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
       setIsFetching(false);
     }
   }
-}, [filterStatus, filterIsHot, filterStart, filterEnd]);
+}, [filterStatus, filterIsHot, filterStart, filterEnd, sortBy, sortOrder]);
 
   // Refetch on filter change (and on initial user load)
   useEffect(() => {
     if (!clerkLoaded || !clerkUser) return;
     fetchLeads();
   }, [fetchLeads, clerkLoaded, clerkUser]);
+
+  // -------------------------------------------------------------------------
+  // EXPORT LEADS
+  // -------------------------------------------------------------------------
+
+  const handleExportLeads = useCallback(() => {
+    if (leads.length === 0) {
+      toast.info("No leads to export.");
+      return;
+    }
+
+    const headers = ["Lead ID", "Client Name", "Phone", "Product Interest", "Status", "Hot", "Created By", "Created At", "Updated At", "Reminder Date"];
+    const rows = leads.map(lead => [
+      lead.leadId,
+      lead.clientName,
+      lead.phone,
+      lead.productInterest.replace(/"/g, '""').replace(/\n/g, ' '),
+      lead.status,
+      lead.isHot ? "Yes" : "No",
+      lead.createdByName,
+      lead.createdAt ? new Date(lead.createdAt).toISOString() : "",
+      lead.updatedAt ? new Date(lead.updatedAt).toISOString() : "",
+      lead.reminderDate ? new Date(lead.reminderDate).toISOString().slice(0, 10) : "",
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${cell}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `leads-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`Exported ${leads.length} leads to CSV.`);
+  }, [leads]);
 
   // -------------------------------------------------------------------------
   // URL ACTION HANDLER
@@ -747,17 +794,47 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
     <TooltipProvider delayDuration={300}>
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <NavbarExtension>
-          <NavButton
-            type="crate"
-            text="New Leads Entry"
-            className={`${NAV_COLOR_MAP.red.navBase} hover:${NAV_COLOR_MAP.red.createHover}`}
-            onClick={() => setIsCreateLeadDialogOpen(true)}
-          />
-          <NavButton
-            type="refresh"
-            onClick={() => fetchLeads()}
-            isLoading={isFetching}
-          />
+          <div className="flex items-center gap-2 flex-wrap pb-2">
+            <NavButton
+              type="crate"
+              text="New Leads Entry"
+              className={`${NAV_COLOR_MAP.red.navBase} hover:${NAV_COLOR_MAP.red.createHover}`}
+              onClick={() => setIsCreateLeadDialogOpen(true)}
+            />
+            <NavButton
+              type="refresh"
+              onClick={() => fetchLeads()}
+              isLoading={isFetching}
+            />
+
+            {/* Sort by (navbar option) */}
+            <Select
+              value={sortBy}
+              onValueChange={(v) => setSortBy(v as SortableField)}
+            >
+              <SelectTrigger className="h-8 w-[150px] text-xs gap-1.5 border-gray-300 dark:border-gray-600 bg-white/80 dark:bg-gray-800/80">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="createdAt">Created Date</SelectItem>
+                <SelectItem value="updatedAt">Updated Date</SelectItem>
+                <SelectItem value="clientName">Client Name</SelectItem>
+                <SelectItem value="status">Status</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Sort order toggle (navbar option) */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSortOrder(o => (o === 'desc' ? 'asc' : 'desc'))}
+              className="h-8 rounded-full text-xs gap-1.5 border-gray-300 dark:border-gray-600 bg-white/80 dark:bg-gray-800/80"
+            >
+              {sortOrder === 'desc' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5 rotate-180" />}
+              <span className="hidden sm:inline">{sortOrder === 'desc' ? 'Newest' : 'Oldest'}</span>
+            </Button>
+          </div>
         </NavbarExtension>
         {/* Today's Summary Banner */}
         <div className="p-4 my-3 bg-blue-100 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-between flex-wrap gap-4">
@@ -801,6 +878,31 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
                 By Creator
               </button>
             </div>
+
+            {/* Sort order toggle (toolbar option) */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSortOrder(o => (o === 'desc' ? 'asc' : 'desc'))}
+              className="h-8 text-xs gap-1.5"
+            >
+              {sortOrder === 'desc' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5 rotate-180" />}
+              <span>{sortOrder === 'desc' ? 'Descending' : 'Ascending'}</span>
+            </Button>
+
+            {/* Export button (toolbar option) */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExportLeads}
+              disabled={isFetching}
+              className="h-8 text-xs gap-1.5"
+            >
+              {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              <span>Export CSV</span>
+            </Button>
 
             {/* Status filter */}
             <Select
