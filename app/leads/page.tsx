@@ -13,7 +13,8 @@ import {
   User as UserIcon, Calendar, CheckCircle, XCircle, Clock, Plus, Edit, Trash2,
   Phone, History, Loader2, Star, MoreVertical, Upload, Flame,
   Eye, X, AlertTriangle, Paperclip, Bell, Download, MessageCircle, PhoneCall,
-  TrendingUp
+  TrendingUp, LayoutGrid,
+  UsersIcon
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -344,9 +345,7 @@ export default function LeadManagementPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const isAdmin = currentUserProfile?.role === 'super-admin';
-
-  // -------------------------------------------------------------------------
+  // ------------------------------------------------------------------------
   // FETCH LEADS
   // -------------------------------------------------------------------------
 
@@ -371,12 +370,6 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
       const result: LeadPage = await leadApiService.fetchLeads({
         limit: PAGE_SIZE,
         cursor,
-        sort: sortBy,
-        order: sortOrder,
-        ...(filterStatus ? { status: filterStatus } : {}),
-        ...(filterIsHot !== undefined ? { isHot: filterIsHot } : {}),
-        ...(filterStart ? { start: filterStart } : {}),
-        ...(filterEnd ? { end: filterEnd } : {}),
       });
 
       // A newer fetch started while this one was in flight — abandon.
@@ -603,6 +596,50 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
   // DERIVED GROUPS
   // -------------------------------------------------------------------------
 
+  // Client-side filtering + sorting — avoids backend round-trips on every filter change
+  const filteredAndSortedLeads = useMemo(() => {
+    let result = leads;
+
+    // Status filter
+    if (filterStatus) {
+      result = result.filter(l => l.status === filterStatus);
+    }
+
+    // Hot filter
+    if (filterIsHot === true) {
+      result = result.filter(l => l.isHot === true);
+    }
+
+    // Date range filter (by createdAt)
+    if (filterStart) {
+      const start = new Date(filterStart);
+      result = result.filter(l => l.createdAt && new Date(l.createdAt) >= start);
+    }
+    if (filterEnd) {
+      const end = new Date(filterEnd);
+      result = result.filter(l => l.createdAt && new Date(l.createdAt) <= end);
+    }
+
+    // Client-side sort
+    result = [...result].sort((a, b) => {
+      let aVal: any, bVal: any;
+      switch (sortBy) {
+        case 'clientName':
+          aVal = a.clientName; bVal = b.clientName; break;
+        case 'status':
+          aVal = a.status; bVal = b.status; break;
+        default:
+          aVal = a[sortBy] || '';
+          bVal = b[sortBy] || '';
+      }
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [leads, filterStatus, filterIsHot, filterStart, filterEnd, sortBy, sortOrder]);
+
   const { newTodayLeads, reminderDueTodayLeads, needsAttentionLeads, upcomingFollowUpsLeads, completedClosedLeads } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -613,7 +650,7 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
     const upcoming: Lead[] = [];
     const closed: Lead[] = [];
 
-    leads.forEach(lead => {
+    filteredAndSortedLeads.forEach(lead => {
       const createdAt = new Date(lead.createdAt || 0);
       createdAt.setHours(0, 0, 0, 0);
 
@@ -653,7 +690,7 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
       upcomingFollowUpsLeads: upcoming,
       completedClosedLeads: closed,
     };
-  }, [leads]);
+  }, [filteredAndSortedLeads]);
 
   const groupedCompletedClosedLeads = useMemo(() => {
     return completedClosedLeads.reduce((acc, lead) => {
@@ -676,7 +713,7 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
       closed: number;
     }>();
 
-    for (const lead of leads) {
+    for (const lead of filteredAndSortedLeads) {
       const key = lead.createdBy;
       let entry = map.get(key);
       if (!entry) {
@@ -699,7 +736,7 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
     }
 
     return Array.from(map.values()).sort((a, b) => b.leads.length - a.leads.length);
-  }, [leads]);
+  }, [filteredAndSortedLeads]);
 
   // -------------------------------------------------------------------------
   // DIALOG HANDLERS
@@ -806,34 +843,6 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
               onClick={() => fetchLeads()}
               isLoading={isFetching}
             />
-
-            {/* Sort by (navbar option) */}
-            <Select
-              value={sortBy}
-              onValueChange={(v) => setSortBy(v as SortableField)}
-            >
-              <SelectTrigger className="h-8 w-[150px] text-xs gap-1.5 border-gray-300 dark:border-gray-600 bg-white/80 dark:bg-gray-800/80">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="createdAt">Created Date</SelectItem>
-                <SelectItem value="updatedAt">Updated Date</SelectItem>
-                <SelectItem value="clientName">Client Name</SelectItem>
-                <SelectItem value="status">Status</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Sort order toggle (navbar option) */}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setSortOrder(o => (o === 'desc' ? 'asc' : 'desc'))}
-              className="h-8 rounded-full text-xs gap-1.5 border-gray-300 dark:border-gray-600 bg-white/80 dark:bg-gray-800/80"
-            >
-              {sortOrder === 'desc' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5 rotate-180" />}
-              <span className="hidden sm:inline">{sortOrder === 'desc' ? 'Newest' : 'Oldest'}</span>
-            </Button>
           </div>
         </NavbarExtension>
         {/* Today's Summary Banner */}
@@ -848,122 +857,143 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
             <p><strong>{needsAttentionLeads.length}</strong> Overdue</p>
           </div>
         </div>
-        {/* Admin toolbar: mode toggle + filters */}
-        {isAdmin && (
-          <div className="p-4 my-3 bg-white dark:bg-gray-800 border rounded-lg flex flex-wrap items-center gap-3">
-            {/* Mode toggle */}
-            <div className="flex rounded-md border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setViewMode('normal')}
-                className={cn(
-                  'px-3 py-1.5 text-sm font-medium transition-colors',
-                  viewMode === 'normal'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700',
-                )}
-              >
-                Normal
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('by-creator')}
-                className={cn(
-                  'px-3 py-1.5 text-sm font-medium transition-colors border-l',
-                  viewMode === 'by-creator'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700',
-                )}
-              >
-                By Creator
-              </button>
-            </div>
-
-            {/* Sort order toggle (toolbar option) */}
-            <Button
+        {/* Centralized filter toolbar — client-side filtering, no backend round-trips */}
+        <div className="px-4 my-3 flex flex-wrap items-center gap-2.5 text-sm">
+          {/* View mode toggle */}
+          <div className="flex rounded-lg border overflow-hidden">
+            <button
               type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setSortOrder(o => (o === 'desc' ? 'asc' : 'desc'))}
-              className="h-8 text-xs gap-1.5"
+              onClick={() => setViewMode('normal')}
+              className={cn(
+                'px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1',
+                viewMode === 'normal'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700',
+              )}
             >
-              {sortOrder === 'desc' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5 rotate-180" />}
-              <span>{sortOrder === 'desc' ? 'Descending' : 'Ascending'}</span>
-            </Button>
-
-            {/* Export button (toolbar option) */}
-            <Button
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Normal</span>
+            </button>
+            <button
               type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleExportLeads}
-              disabled={isFetching}
-              className="h-8 text-xs gap-1.5"
+              onClick={() => setViewMode('by-creator')}
+              className={cn(
+                'px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1 border-l',
+                viewMode === 'by-creator'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700',
+              )}
             >
-              {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-              <span>Export CSV</span>
-            </Button>
-
-            {/* Status filter */}
-            <Select
-              value={filterStatus ?? 'all'}
-              onValueChange={(v) => setFilterStatus(v === 'all' ? undefined : (v as LeadStatus))}
-            >
-              <SelectTrigger className="w-[160px] h-9">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="In Progress">In Progress</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
-                <SelectItem value="Closed">Closed</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Hot filter */}
-            <label className="flex items-center gap-2 text-sm">
-              <Switch
-                checked={filterIsHot === true}
-                onCheckedChange={(v) => setFilterIsHot(v ? true : undefined)}
-              />
-              Hot only
-            </label>
-
-            {/* Date range */}
-            <div className="flex items-center gap-2">
-              <Input
-                type="date"
-                className="h-9 w-[140px]"
-                value={filterStart ? filterStart.slice(0, 10) : ''}
-                onChange={(e) => setFilterStart(e.target.value ? toStartOfDayIso(e.target.value) : undefined)}
-              />
-              <span className="text-sm text-gray-500">to</span>
-              <Input
-                type="date"
-                className="h-9 w-[140px]"
-                value={filterEnd ? filterEnd.slice(0, 10) : ''}
-                onChange={(e) => setFilterEnd(e.target.value ? toEndOfDayIso(e.target.value) : undefined)}
-              />
-            </div>
-
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setFilterStatus(undefined);
-                  setFilterIsHot(undefined);
-                  setFilterStart(undefined);
-                  setFilterEnd(undefined);
-                }}
-              >
-                Clear filters
-              </Button>
-            )}
+              <UsersIcon className="w-3.5 h-3.5" />
+              <span>By Creator</span>
+            </button>
           </div>
-        )}
 
+          {/* Sort by */}
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortableField)}>
+            <SelectTrigger className="h-8 w-[140px] text-xs gap-1.5">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="createdAt">Created Date</SelectItem>
+              <SelectItem value="updatedAt">Updated Date</SelectItem>
+              <SelectItem value="clientName">Client Name</SelectItem>
+              <SelectItem value="status">Status</SelectItem>
+            </SelectContent>
+          </Select>
 
+          {/* Sort order */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setSortOrder(o => (o === 'desc' ? 'asc' : 'desc'))}
+            className="h-8 text-xs gap-1.5"
+          >
+            {sortOrder === 'desc' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5 rotate-180" />}
+            <span>{sortOrder === 'desc' ? 'Desc' : 'Asc'}</span>
+          </Button>
+
+          {/* Status filter */}
+          <Select
+            value={filterStatus ?? 'all'}
+            onValueChange={(v) => setFilterStatus(v === 'all' ? undefined : (v as LeadStatus))}
+          >
+            <SelectTrigger className="h-8 w-[140px] text-xs gap-1.5">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="In Progress">In Progress</SelectItem>
+              <SelectItem value="Completed">Completed</SelectItem>
+              <SelectItem value="Closed">Closed</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Hot filter */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5">
+                <Switch
+                  checked={filterIsHot === true}
+                  onCheckedChange={(v) => setFilterIsHot(v ? true : undefined)}
+                  className="data-[state=checked]:bg-red-500 h-4 w-7"
+                />
+                <span className="text-xs text-gray-600 dark:text-gray-300">Hot</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent><p>Show hot leads only</p></TooltipContent>
+          </Tooltip>
+
+          {/* Date range */}
+          <div className="flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+            <Input
+              type="date"
+              className="h-7 text-xs w-[120px]"
+              value={filterStart ? filterStart.slice(0, 10) : ''}
+              onChange={(e) => setFilterStart(e.target.value ? toStartOfDayIso(e.target.value) : undefined)}
+            />
+            <span className="text-xs text-gray-500">–</span>
+            <Input
+              type="date"
+              className="h-7 text-xs w-[120px]"
+              value={filterEnd ? filterEnd.slice(0, 10) : ''}
+              onChange={(e) => setFilterEnd(e.target.value ? toEndOfDayIso(e.target.value) : undefined)}
+            />
+          </div>
+
+          {/* Clear filters */}
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFilterStatus(undefined);
+                setFilterIsHot(undefined);
+                setFilterStart(undefined);
+                setFilterEnd(undefined);
+              }}
+              className="h-8 text-xs gap-1.5"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Clear</span>
+            </Button>
+          )}
+
+          {/* Export */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportLeads}
+            disabled={isFetching}
+            className="h-8 text-xs gap-1.5"
+          >
+            {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            <span>Export</span>
+          </Button>
+        </div>
 
         <main className="space-y-8">
           {viewMode === 'normal' ? (
