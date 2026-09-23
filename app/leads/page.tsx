@@ -509,7 +509,7 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
           break;
       }
 
-      await leadApiService.updateLead(lead.leadId, updatedFields, newHistoryEntry ?? undefined);
+      await leadApiService.updateLead(lead.leadId, updatedFields, newHistoryEntry);
       toast.success(`Lead ${lead.leadId} updated.`);
 
       const refreshed = await fetchLeads();
