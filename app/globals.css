@@ -305,3 +305,59 @@
     background-color: #475569;
     border: 2px solid #1f2937;
 }
+
+.lead-scroll-card {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@supports (animation-timeline: view()) {
+  .lead-scroll-card {
+    animation-name: leadCardView;
+    animation-duration: 1ms;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: view(block);
+    animation-range: entry 0% exit 100%;
+    will-change: transform, opacity, filter;
+  }
+
+  @keyframes leadCardView {
+    /* Enter from bottom */
+    0% {
+      opacity: 0;
+      transform: translateY(35px) scale(0.84);
+      filter: blur(2px);
+    }
+
+    /* Smoothly settle */
+    18% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+
+    /* Main viewing area */
+    70% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+
+    /* Exit through top */
+    100% {
+      opacity: 0;
+      transform: translateY(-22px) scale(0.86);
+      filter: blur(3px);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lead-scroll-card {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}

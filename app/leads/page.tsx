@@ -83,17 +83,6 @@ interface Lead {
 type SortableField = 'createdAt' | 'updatedAt' | 'clientName' | 'status';
 type SortOrder = 'asc' | 'desc';
 
-interface LeadQuery {
-  limit?: number;
-  cursor?: string | null;
-  sort?: SortableField;
-  order?: SortOrder;
-  status?: LeadStatus;
-  isHot?: boolean;
-  start?: string;
-  end?: string;
-}
-
 interface LeadPage {
   data: Lead[];
   nextCursor: string | null;
@@ -315,9 +304,6 @@ export default function LeadManagementPage() {
   const [sortBy, setSortBy] = useState<SortableField>('createdAt');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
-  // --- Abort controller for in-flight fetches ---
-  const abortRef = useRef<AbortController | null>(null);
-
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
   const role = usePermissionStore(s => s.role);
 
@@ -340,56 +326,56 @@ export default function LeadManagementPage() {
   // FETCH LEADS
   // -------------------------------------------------------------------------
 
-const requestIdRef = useRef(0);
+  const requestIdRef = useRef(0);
 
-const fetchLeads = useCallback(async (): Promise<Lead[]> => {
-  // Each call gets a monotonically increasing id. Any fetch whose id is not
-  // the latest when it resolves is abandoned — its result is discarded so it
-  // cannot overwrite a newer fetch's state.
-  const requestId = ++requestIdRef.current;
+  const fetchLeads = useCallback(async (): Promise<Lead[]> => {
+    // Each call gets a monotonically increasing id. Any fetch whose id is not
+    // the latest when it resolves is abandoned — its result is discarded so it
+    // cannot overwrite a newer fetch's state.
+    const requestId = ++requestIdRef.current;
 
-  setIsFetching(true);
-  try {
-    const PAGE_SIZE = 100;
-    const MAX_PAGES = 25;
+    setIsFetching(true);
+    try {
+      const PAGE_SIZE = 100;
+      const MAX_PAGES = 25;
 
-    const all: Lead[] = [];
-    let cursor: string | null = null;
-    let page = 0;
+      const all: Lead[] = [];
+      let cursor: string | null = null;
+      let page = 0;
 
-    while (page < MAX_PAGES) {
-      const result: LeadPage = await leadApiService.fetchLeads({
-        limit: PAGE_SIZE,
-        cursor,
-      });
+      while (page < MAX_PAGES) {
+        const result: LeadPage = await leadApiService.fetchLeads({
+          limit: PAGE_SIZE,
+          cursor,
+        });
 
-      // A newer fetch started while this one was in flight — abandon.
+        // A newer fetch started while this one was in flight — abandon.
+        if (requestId !== requestIdRef.current) return [];
+
+        all.push(...result.data);
+
+        if (!result.hasNext || !result.nextCursor) break;
+        cursor = result.nextCursor;
+        page++;
+      }
+
+      // Final guard: only the latest fetch is allowed to write state.
       if (requestId !== requestIdRef.current) return [];
 
-      all.push(...result.data);
-
-      if (!result.hasNext || !result.nextCursor) break;
-      cursor = result.nextCursor;
-      page++;
+      setLeads(all);
+      return all;
+    } catch (error: any) {
+      if (requestId !== requestIdRef.current) return [];
+      if (error?.name === 'AbortError' || error?.name === 'CanceledError') return [];
+      console.error('Error fetching Leads:', error);
+      toast.error(`Failed to fetch Leads: ${error.message}`);
+      return [];
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setIsFetching(false);
+      }
     }
-
-    // Final guard: only the latest fetch is allowed to write state.
-    if (requestId !== requestIdRef.current) return [];
-
-    setLeads(all);
-    return all;
-  } catch (error: any) {
-    if (requestId !== requestIdRef.current) return [];
-    if (error?.name === 'AbortError' || error?.name === 'CanceledError') return [];
-    console.error('Error fetching Leads:', error);
-    toast.error(`Failed to fetch Leads: ${error.message}`);
-    return [];
-  } finally {
-    if (requestId === requestIdRef.current) {
-      setIsFetching(false);
-    }
-  }
-}, [filterStart, filterEnd, sortBy, sortOrder]);
+  }, [filterStart, filterEnd, sortBy, sortOrder]);
 
   // Refetch on filter change (and on initial user load)
   useEffect(() => {
@@ -761,55 +747,106 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
     if (sectionLeads.length === 0) return null;
 
     return (
-      <Card className="rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
-        <CardHeader
-          className={`p-4 text-white text-lg font-semibold flex items-start justify-between rounded-t-xl flex-shrink-0 gap-3 ${color.replace('border-', 'bg-')}`}
+    <Card className="self-start rounded-2xl overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
+  <CardHeader
+    className={`px-4 py-2 text-white text-lg rounded-sm font-semibold flex items-start justify-between rounded-t-xl flex-shrink-0 gap-3 ${color.replace(
+      "border-",
+      "bg-"
+    )}`}
+  >
+    <div className="min-w-0 flex-1">
+      <h2 className="text-2xl font-bold flex items-center gap-2 truncate">
+        {icon}
+        <span className="truncate">{title}</span>
+      </h2>
+
+      {subtitle && (
+        <p className="text-xs opacity-80 truncate mt-0.5 font-normal">
+          {subtitle}
+        </p>
+      )}
+
+      {stats && (
+        <div
+          className="flex flex-wrap gap-1.5 mt-2"
+          aria-label="Section statistics"
         >
-          <div className="min-w-0 flex-1">
-            <h2 className="text-2xl font-bold flex items-center gap-2 truncate">
-              {icon} <span className="truncate">{title}</span>
-            </h2>
+          <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
+            In Progress: {stats.inProgress}
+          </span>
 
-            {subtitle && (
-              <p className="text-xs opacity-80 truncate mt-0.5 font-normal">{subtitle}</p>
-            )}
+          <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
+            Won: {stats.completed}
+          </span>
 
-            {stats && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
-                  In Progress: {stats.inProgress}
-                </span>
-                <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
-                  Won: {stats.completed}
-                </span>
-                <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
-                  Closed: {stats.closed}
-                </span>
-              </div>
-            )}
-          </div>
+          <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
+            Closed: {stats.closed}
+          </span>
+        </div>
+      )}
+    </div>
 
-          <Badge className="bg-white text-gray-800 font-bold px-3 py-1 rounded-full flex-shrink-0">
-            {sectionLeads.length}
-          </Badge>
-        </CardHeader>
+    <Badge
+      className="bg-white text-gray-800 font-bold px-3 py-1 rounded-full flex-shrink-0"
+      aria-label={`${sectionLeads.length} leads in ${title}`}
+    >
+      {sectionLeads.length}
+    </Badge>
+  </CardHeader>
 
-        <CardContent className="p-4 flex flex-col gap-4 overflow-y-auto max-h-[600px]">
-          {sectionLeads.map((lead) => (
-            <LeadCard
-              key={lead.id}
-              lead={lead}
-              groupColor={color}
-              onSelectLead={setSelectedLead}
-              onAction={handleLeadAction}
-              isActionLoading={isActionLoading}
-              currentUser={currentUserProfile}
-              onOpenRescheduleDialog={handleOpenRescheduleDialog}
-              onOpenLeadDetailsDialogWithCloseNote={handleOpenLeadDetailsDialogWithCloseNote}
-            />
-          ))}
-        </CardContent>
-      </Card>
+  <CardContent className="relative p-0">
+    <div
+      className="max-h-[850px] overflow-y-auto p-4 flex flex-col gap-4"
+      tabIndex={0}
+      role="list"
+      aria-label={`${title} leads`}
+    >
+      {sectionLeads.map((lead) => (
+        <div key={lead.id} role="listitem" className="lead-scroll-card">
+          <LeadCard
+            lead={lead}
+            groupColor={color}
+            onSelectLead={setSelectedLead}
+            onAction={handleLeadAction}
+            isActionLoading={isActionLoading}
+            currentUser={currentUserProfile}
+            onOpenRescheduleDialog={handleOpenRescheduleDialog}
+            onOpenLeadDetailsDialogWithCloseNote={
+              handleOpenLeadDetailsDialogWithCloseNote
+            }
+          />
+        </div>
+      ))}
+    </div>
+
+    {/* Fixed viewport edges */}
+    <div
+      aria-hidden="true"
+      className="
+        pointer-events-none
+        absolute inset-x-0 top-0 z-20
+        h-8
+        bg-gradient-to-b
+        from-white via-white/55 to-transparent
+        backdrop-blur-[2px]
+        dark:from-gray-800 dark:via-gray-800/95
+      "
+    />
+
+    <div
+      aria-hidden="true"
+      className="
+        pointer-events-none
+        absolute inset-x-0 bottom-0 z-20
+        h-16
+        bg-gradient-to-t
+        from-white via-white/55 to-transparent
+        backdrop-blur-[2px]
+        dark:from-gray-800 dark:via-gray-800/95
+      "
+    />
+  </CardContent>
+</Card>
     );
   };
 
@@ -821,7 +858,7 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
 
   return (
 
-    
+
     <TooltipProvider delayDuration={300}>
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <NavbarExtension>
@@ -989,7 +1026,7 @@ const fetchLeads = useCallback(async (): Promise<Lead[]> => {
           {viewMode === 'normal' ? (
             <>
               {/* Main grouped sections */}
-              <div className="space-y-8 grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 items-start">
                 {renderGroupedSection("Needs Attention", needsAttentionLeads, "border-red-600", <AlertTriangle className="text-white" />)}
                 {renderGroupedSection("Reminder Due Today", reminderDueTodayLeads, "border-amber-500", <Bell className="text-white" />)}
                 {renderGroupedSection("New Today", newTodayLeads, "border-green-600", <Star className="text-white" />)}
@@ -1310,11 +1347,10 @@ const LeadFormDialog: React.FC<LeadFormDialogProps> = ({ isOpen, onOpenChange, o
               <div className="flex flex-col h-full sm:col-span-1 justify-end space-y-2">
                 <Label htmlFor="isHot" className="text-sm font-medium leading-none opacity-0 select-none">Hot Lead</Label>
                 <div
-                  className={`flex items-center justify-between w-full px-3 py-2 border rounded-lg transition-colors cursor-pointer h-10 ${
-                    isHot
+                  className={`flex items-center justify-between w-full px-3 py-2 border rounded-lg transition-colors cursor-pointer h-10 ${isHot
                       ? 'border-red-500 bg-red-50 dark:bg-red-900/10'
                       : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'
-                  }`}
+                    }`}
                   onClick={() => setIsHot(prev => !prev)}
                 >
                   <div className="flex items-center space-x-2 text-sm font-medium">
@@ -1735,11 +1771,10 @@ const LeadDetailsDialog: React.FC<LeadDetailsDialogProps> = (props) => {
                   />
                 ) : (
                   <span
-                    className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full transition-colors duration-200 ${
-                      formData.isHot
+                    className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full transition-colors duration-200 ${formData.isHot
                         ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
                         : 'bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-700 dark:text-gray-400'
-                    }`}
+                      }`}
                   >
                     {formData.isHot ? '🔥 HIGH PRIORITY' : 'STANDARD'}
                   </span>

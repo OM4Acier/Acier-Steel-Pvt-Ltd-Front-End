@@ -9,8 +9,9 @@
  *
  * Server returns ISO date strings for createdAt/updatedAt/reminderDate.
  * Server returns isHot as boolean.
- * Server returns _id; the API layer maps _id -> id client-side (matching
- * the existing leadsApi.ts convention).
+ * Server returns `id` directly (already a string). Both leadsApi.ts and
+ * leadsCursorApi.ts pass `id` through as-is; the old `_id`-only normalization
+ * was removed when the backend migrated away from MongoDB `_id` responses.
  */
 
 import type { Lead, LeadStatus } from '@/lib/api/endpoints/leadsApi';

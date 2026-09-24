@@ -25,7 +25,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LeadFilters } from '@/types/leads.types';
-import { fetchLeadsPage, type InvalidCursorError } from '@/lib/api/endpoints/leadsCursorApi';
+import { fetchLeadsPage, InvalidCursorError } from '@/lib/api/endpoints/leadsCursorApi';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -73,7 +73,10 @@ export function useLeads(filters: LeadFilters, filterKey: string): UseLeadsRetur
   const abortRef = useRef<AbortController | null>(null);
   const filterKeyRef = useRef(filterKey);
   const mountedRef = useRef(true);
-  const fetchPageRef = useRef<(() => void) | null>(null);
+  // Hold the latest fetchPage callback so the filterKey effect can call it
+  // without including fetchPage in its deps (which would recreate the effect
+  // whenever filters change and cause a double-fetch).
+  const fetchPageRef = useRef<((cursor: string | null | undefined, isFirstPage: boolean) => Promise<void>) | null>(null);
 
   // Keep the filterKey ref in sync.
   useEffect(() => {
@@ -107,9 +110,7 @@ export function useLeads(filters: LeadFilters, filterKey: string): UseLeadsRetur
     setInitialLoading(true);
 
     // Kick off the first page fetch using the latest callback.
-    fetchPageRef.current(null, true);
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchPageRef.current?.(null, true);
   }, [filterKey]);
 
   // ── Fetch one page ───────────────────────────────────────────────────────
@@ -152,7 +153,7 @@ export function useLeads(filters: LeadFilters, filterKey: string): UseLeadsRetur
           // if the server keeps rejecting for some reason.
           // Use the ref to get the latest fetchPage, in case filters changed
           // concurrently (unlikely in the invalid-cursor case, but safe).
-          setTimeout(() => fetchPageRef.current(null, isFirstPage), 0);
+          setTimeout(() => fetchPageRef.current?.(null, isFirstPage), 0);
           return;
         }
 
@@ -179,9 +180,8 @@ export function useLeads(filters: LeadFilters, filterKey: string): UseLeadsRetur
     // triggers loadMore rapidly (the accumulator deduplicates by arrival order,
     // and the old request's result will be discarded if filters changed).
     const controller = new AbortController();
-    const prevAbort = abortRef.current;
     abortRef.current = controller;
-    // Don't abort prevAbort — let it finish and discard if needed.
+    // Don't abort the previous request — let it finish and discard if needed.
 
     fetchPage(nextCursor, false).then(() => {
       if (mountedRef.current) {

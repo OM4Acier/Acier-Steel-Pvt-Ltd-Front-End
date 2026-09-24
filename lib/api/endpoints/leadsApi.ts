@@ -1,10 +1,19 @@
 import { apiClient } from '../client';
-
 export type LeadStatus = 'In Progress' | 'Completed' | 'Closed';
 export type LeadPriority = 'High' | 'Medium' | 'Low';
 
 export interface EditHistoryEntry {
-  timestamp: number;
+  /**
+   * Subdocument `_id`s are NOT renamed by the backend `toApiLead` mapper —
+   * that only strips/renames top-level `_id`. If you don't want to see
+   * `_id` on edit history rows, either:
+   *   (a) add `.select('-editHistory._id')` on the server, or
+   *   (b) exclude editHistory from the list `SELECTABLE_FIELDS`, or
+   *   (c) strip it in the mapper (see note at the bottom).
+   * For now this stays optional and matches what the server actually sends.
+   */
+  _id?: string;
+  timestamp: string | number;
   editorName: string;
   description: string;
 }
@@ -21,14 +30,21 @@ export interface ExistingLeadInfo {
 }
 
 export interface Lead {
-  isHot?: any;
+  // ✅ was `any` — server always sends a boolean for isHot
+  isHot?: boolean;
+
   id: string;
   leadId: string;
   clientName: string;
   phone: string;
   productInterest: string;
   status: LeadStatus;
+
+  // ⚠️ Backend `ILead` has no `priority` field — this is client-only.
+  //    Either the server needs the field added, or every `priority` reference
+  //    on the frontend resolves to `undefined` at runtime. Confirm which.
   priority?: LeadPriority;
+
   closingNote?: string;
   reminderDate?: string;
   editHistory?: EditHistoryEntry[];
@@ -40,6 +56,30 @@ export interface Lead {
   updatedAt?: string;
 }
 
+// ---------------------------------------------------------------------------
+// New shapes required by the cursor-based list endpoint
+// ---------------------------------------------------------------------------
+
+export type SortableField = 'createdAt' | 'updatedAt' | 'clientName' | 'status';
+export type SortOrder = 'asc' | 'desc';
+
+export interface LeadQuery {
+  limit?: number;
+  cursor?: string | null;
+  sort?: SortableField;
+  order?: SortOrder;
+  status?: LeadStatus;
+  isHot?: boolean;
+  start?: string;   // ISO timestamp — never bare YYYY-MM-DD
+  end?: string;     // ISO timestamp — always endOfDayIso for the last day
+}
+
+export interface LeadPage {
+  data: Lead[];
+  nextCursor: string | null;
+  hasNext: boolean;
+}
+
 /**
  * lib/api/endpoints/leadsApi.ts
  *
@@ -47,18 +87,38 @@ export interface Lead {
  */
 export const leadsApi = {
   /**
-   * Fetch all leads
-   * GET /leads
-   */
-  fetchLeads: async (): Promise<Lead[]> => {
-    const fetchedLeads = await apiClient.get<any[]>('/leads');
-    if (!fetchedLeads) return []; // Handle cancellation
-    if (!Array.isArray(fetchedLeads)) {
-      console.error('[leadsApi] Expected array but got:', fetchedLeads);
-      return [];
-    }
-    return fetchedLeads.map((lead: any) => ({ ...lead, id: lead._id }));
-  },
+ * Fetch a page of leads.
+ * GET /leads?limit=&cursor=&sort=&order=&status=&isHot=&start=&end=
+ */
+fetchLeads: async (
+  params: LeadQuery = {},
+): Promise<LeadPage> => {
+  const query = new URLSearchParams();
+  if (params.limit !== undefined) query.set('limit', String(params.limit));
+  if (params.cursor) query.set('cursor', params.cursor);
+  if (params.sort) query.set('sort', params.sort);
+  if (params.order) query.set('order', params.order);
+  if (params.status) query.set('status', params.status);
+  if (params.isHot !== undefined) query.set('isHot', String(params.isHot));
+  if (params.start) query.set('start', params.start);
+  if (params.end) query.set('end', params.end);
+
+  const qs = query.toString();
+  const response = await apiClient.get<LeadPage | null>(`/leads${qs ? `?${qs}` : ''}`);
+
+  // apiClient returns null on cancellation (AbortController)
+  if (!response) {
+    return { data: [], nextCursor: null, hasNext: false };
+  }
+
+  // Defensive: if the backend ever returns the legacy array shape (e.g. during
+  // a partial rollout), wrap it so callers never see a shape mismatch.
+  if (Array.isArray(response)) {
+    return { data: response as Lead[], nextCursor: null, hasNext: false };
+  }
+
+  return response;
+},
 
   /**
    * Create a new lead
@@ -68,7 +128,8 @@ export const leadsApi = {
     const payload = { ...leadData, status: 'In Progress' as LeadStatus };
     const newLead = await apiClient.post<any>('/leads', payload);
     if (!newLead) throw new Error('Request cancelled');
-    return { ...newLead, id: newLead._id };
+    // Backend may return `id` directly or nest it under `_id`; normalise.
+    return { ...newLead, id: newLead.id ?? newLead._id };
   },
 
   /**
@@ -86,7 +147,8 @@ export const leadsApi = {
     }
     const updatedLead = await apiClient.put<any>(`/leads/${leadId}`, payload);
     if (!updatedLead) throw new Error('Request cancelled');
-    return { ...updatedLead, id: updatedLead._id };
+    // Backend may return `id` directly or nest it under `_id`; normalise.
+    return { ...updatedLead, id: updatedLead.id ?? updatedLead._id };
   },
 
   /**

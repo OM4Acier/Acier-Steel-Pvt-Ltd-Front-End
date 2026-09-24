@@ -9,17 +9,17 @@
  * Auth: Bearer token injected automatically by the shared apiClient
  * (ClerkTokenProvider interceptor). No extra headers required.
  *
- * Comparison with the existing leadsApi.ts:
- *   - leadsApi.fetchLeads()            → GET /leads           → Lead[]        (old, no pagination)
- *   - leadsCursorApi.fetchLeadsPage()  → GET /api/leads       → LeadPage     (new, cursor-based)
- *   - leadsCursorApi.fetchLeadCount()  → GET /api/leads/count → { count }    (separate, optional)
+ * Comparison with the existing leadsApi:
+ *   - leadsApi.fetchLeads()           → GET /leads     → Lead[]        (old, no pagination)
+ *   - leadsCursorApi.fetchLeadsPage() → GET /api/leads → LeadPage     (new, cursor-based)
  *
  * The old leadsApi remains untouched — deleteLead / updateLead / addLead /
  * uploadFile / deleteFile are still used by the page for mutations.
  */
 
 import { apiClient } from '../client';
-import type { LeadPage, LeadFilters, buildLeadQuery } from '@/types/leads.types';
+import type { LeadPage, LeadFilters } from '@/types/leads.types';
+import { buildLeadQuery } from '@/types/leads.types';
 import type { Lead } from './leadsApi';
 
 // ── Error shapes ──────────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ export async function fetchLeadsPage(
   if (cursor) params.cursor = cursor;
 
   const res = await apiClient.get<{
-    data: Array<Lead & { _id: string }>;
+    data: Lead[];
     nextCursor: string | null;
     hasNext: boolean;
     error?: string;
@@ -69,15 +69,11 @@ export async function fetchLeadsPage(
     throw new Error(res.error);
   }
 
-  if (!Array.isArray(res.data)) {
-    throw new Error('Unexpected response shape from /api/leads');
-  }
-
-  // Map _id -> id to match the existing Lead type and the rest of the codebase.
-  const leads: Lead[] = res.data.map((lead) => ({
-    ...lead,
-    id: lead._id,
-  }));
+  // Backend returns { data: Lead[], nextCursor, hasNext } normally.
+  // When there are no leads it may return { data: {}, ... } or { data: [], ... }.
+  // Treat any non-array `data` as an empty page.
+  const raw = res.data;
+  const leads: Lead[] = Array.isArray(raw) ? (raw as unknown as Lead[]) : [];
 
   return {
     data: leads,

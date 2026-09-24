@@ -20,7 +20,8 @@
  */
 
 import { useCallback, useMemo, useState } from 'react';
-import type { LeadFilters, SortableField, SortOrder, LeadStatus } from '@/types/leads.types';
+import type { LeadFilters, SortableField, SortOrder } from '@/types/leads.types';
+import type { LeadStatus } from '@/lib/api/endpoints/leadsApi';
 import { DEFAULT_FILTERS } from '@/types/leads.types';
 
 // ── Public types ──────────────────────────────────────────────────────────────
