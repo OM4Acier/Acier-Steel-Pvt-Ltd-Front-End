@@ -33,6 +33,8 @@ import { usePermissionStore } from '@/stores/permission-store';
 import { NAV_COLOR_MAP } from '@/lib/config/colors';
 
 import { leadsApi } from '@/lib/api/endpoints/leadsApi';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- WIP: LeadCardV2 swap-in (commented usage below)
+import LeadCardV2 from './components/LeadCardV2';
 
 const leadApiService = leadsApi;
 
@@ -747,82 +749,99 @@ export default function LeadManagementPage() {
     if (sectionLeads.length === 0) return null;
 
     return (
-    <Card className="self-start rounded-2xl overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
-  <CardHeader
-    className={`px-4 py-2 text-white text-lg rounded-sm font-semibold flex items-start justify-between rounded-t-xl flex-shrink-0 gap-3 ${color.replace(
-      "border-",
-      "bg-"
-    )}`}
-  >
-    <div className="min-w-0 flex-1">
-      <h2 className="text-2xl font-bold flex items-center gap-2 truncate">
-        {icon}
-        <span className="truncate">{title}</span>
-      </h2>
-
-      {subtitle && (
-        <p className="text-xs opacity-80 truncate mt-0.5 font-normal">
-          {subtitle}
-        </p>
-      )}
-
-      {stats && (
-        <div
-          className="flex flex-wrap gap-1.5 mt-2"
-          aria-label="Section statistics"
+      <Card className="self-start rounded-2xl overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
+        <CardHeader
+          className={`px-4 py-2 text-white text-lg rounded-sm font-semibold flex items-start justify-between rounded-t-xl flex-shrink-0 gap-3 ${color.replace(
+            "border-",
+            "bg-"
+          )}`}
         >
-          <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
-            In Progress: {stats.inProgress}
-          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-2xl font-bold flex items-center gap-2 truncate">
+              {icon}
+              <span className="truncate">{title}</span>
+            </h2>
 
-          <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
-            Won: {stats.completed}
-          </span>
+            {subtitle && (
+              <p className="text-xs opacity-80 truncate mt-0.5 font-normal">
+                {subtitle}
+              </p>
+            )}
 
-          <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
-            Closed: {stats.closed}
-          </span>
-        </div>
-      )}
-    </div>
+            {stats && (
+              <div
+                className="flex flex-wrap gap-1.5 mt-2"
+                aria-label="Section statistics"
+              >
+                <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
+                  In Progress: {stats.inProgress}
+                </span>
 
-    <Badge
-      className="bg-white text-gray-800 font-bold px-3 py-1 rounded-full flex-shrink-0"
-      aria-label={`${sectionLeads.length} leads in ${title}`}
-    >
-      {sectionLeads.length}
-    </Badge>
-  </CardHeader>
+                <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
+                  Won: {stats.completed}
+                </span>
 
-  <CardContent className="relative p-0">
-    <div
-      className="max-h-[850px] overflow-y-auto p-4 flex flex-col gap-4"
-      tabIndex={0}
-      role="list"
-      aria-label={`${title} leads`}
-    >
-      {sectionLeads.map((lead) => (
-        <div key={lead.id} role="listitem" className="lead-scroll-card">
-          <LeadCard
-            lead={lead}
-            groupColor={color}
-            onSelectLead={setSelectedLead}
-            onAction={handleLeadAction}
-            isActionLoading={isActionLoading}
-            currentUser={currentUserProfile}
-            onOpenRescheduleDialog={handleOpenRescheduleDialog}
-            onOpenLeadDetailsDialogWithCloseNote={
-              handleOpenLeadDetailsDialogWithCloseNote
-            }
-          />
-        </div>
-      ))}
-    </div>
+                <span className="text-[10px] uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 font-semibold">
+                  Closed: {stats.closed}
+                </span>
+              </div>
+            )}
+          </div>
 
-    {/* Fixed viewport edges */}
-    <div
-      aria-hidden="true"
-      className="
+          <Badge
+            className="bg-white text-gray-800 font-bold px-3 py-1 rounded-full flex-shrink-0"
+            aria-label={`${sectionLeads.length} leads in ${title}`}
+          >
+            {sectionLeads.length}
+          </Badge>
+        </CardHeader>
+
+        <CardContent className="relative p-0">
+          <div
+            className="max-h-[850px] overflow-y-auto p-4 flex flex-col gap-4"
+            tabIndex={0}
+            role="list"
+            aria-label={`${title} leads`}
+          >
+            {sectionLeads.map((lead) => (
+              <div key={lead.id} role="listitem" className="lead-scroll-card">
+                <LeadCard
+                  lead={lead}
+                  groupColor={color}
+                  onSelectLead={setSelectedLead}
+                  onAction={handleLeadAction}
+                  isActionLoading={isActionLoading}
+                  currentUser={currentUserProfile}
+                  onOpenRescheduleDialog={handleOpenRescheduleDialog}
+                  onOpenLeadDetailsDialogWithCloseNote={
+                    handleOpenLeadDetailsDialogWithCloseNote
+                  }
+                />
+
+                {/* <LeadCardV2
+                  clientName={lead.clientName}
+                  leadId={lead.leadId}
+                  phone={lead.phone}
+                  isHot={lead.isHot}
+                  reminderDate={lead.reminderDate}
+                  createdDate={lead.createdAt}
+                  createdByName={lead.createdByName}
+                  onMarkWon={() => handleLeadAction('convert', lead)}
+                  onSort={() => handleLeadAction('mark-hot', lead)}
+                  onCall={() => window.open(`tel:${lead.phone}`, '_blank', 'noopener,noreferrer')}
+                  onWhatsApp={() => window.open(`https://wa.me/91${lead.phone}`, '_blank', 'noopener,noreferrer')}
+                  onEditReminder={() => handleOpenRescheduleDialog(lead)}
+                  onToggleHot={() => handleLeadAction('mark-hot', lead)}
+                  onOpenDetail={() => setSelectedLead(lead)}
+                /> */}
+              </div>
+            ))}
+          </div>
+
+          {/* Fixed viewport edges */}
+          <div
+            aria-hidden="true"
+            className="
         pointer-events-none
         absolute inset-x-0 top-0 z-20
         h-8
@@ -831,11 +850,11 @@ export default function LeadManagementPage() {
         backdrop-blur-[2px]
         dark:from-gray-800 dark:via-gray-800/95
       "
-    />
+          />
 
-    <div
-      aria-hidden="true"
-      className="
+          <div
+            aria-hidden="true"
+            className="
         pointer-events-none
         absolute inset-x-0 bottom-0 z-20
         h-16
@@ -844,9 +863,9 @@ export default function LeadManagementPage() {
         backdrop-blur-[2px]
         dark:from-gray-800 dark:via-gray-800/95
       "
-    />
-  </CardContent>
-</Card>
+          />
+        </CardContent>
+      </Card>
     );
   };
 
@@ -883,82 +902,142 @@ export default function LeadManagementPage() {
                   variant="outline"
                   size="sm"
                   className={cn(
-                    "h-8 rounded-full text-xs gap-1.5 border-gray-300 dark:border-gray-600 bg-white/80 dark:bg-gray-800/80",
-                    hasActiveFilters && "border-blue-500 bg-blue-50/30",
+                    "h-8 rounded-full text-xs font-semibold gap-1.5 border border-stone-200 dark:border-stone-700 bg-[#fdf9f3] dark:bg-stone-800/90 shadow-[0_2px_10px_-2px_rgba(120,90,60,0.18)] transition-all hover:shadow-[0_4px_16px_-2px_rgba(120,90,60,0.28)]",
+                    hasActiveFilters &&
+                      "border-amber-300 bg-amber-50 text-amber-800 dark:text-amber-300 shadow-[0_2px_14px_-2px_rgba(217,158,44,0.4)]",
                   )}
                 >
                   <Filter className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Filters</span>
                   {hasActiveFilters && (
-                    <Badge className="bg-blue-600 text-white h-4 w-4 min-w-[16px] p-0 rounded-full flex items-center justify-center text-[10px]">
+                    <Badge className="bg-amber-500 text-white h-4 w-4 min-w-[16px] p-0 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm">
                       !
                     </Badge>
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-80 p-3">
-                <div className="space-y-3 text-sm">
-                  {/* View mode toggle */}
-                  <div className="flex rounded-lg border overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('normal')}
-                      className={cn(
-                        'px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1',
-                        viewMode === 'normal'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700',
-                      )}
-                    >
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                      <span>Normal</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('by-creator')}
-                      className={cn(
-                        'px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1 border-l',
-                        viewMode === 'by-creator'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700',
-                      )}
-                    >
-                      <UserIcon className="w-3.5 h-3.5" />
-                      <span>By Creator</span>
-                    </button>
+              <PopoverContent
+                align="start"
+                className="w-[22rem] p-0 rounded-3xl border border-stone-200/70 dark:border-stone-800/70 shadow-[0_24px_70px_-20px_rgba(120,90,60,0.35)] overflow-hidden relative"
+              >
+                {/* Warm off-white radial surface — clean white to warm off-white */}
+                <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_top_left,#ffffff_0%,#fdf9f3_45%,#f4ede2_100%)] dark:bg-[radial-gradient(120%_120%_at_top_left,#2a2723_0%,#211d19_45%,#171411_100%)]" />
+                {/* Soft studio lighting from upper left — no harsh shadows */}
+                <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.85)_0%,rgba(255,255,255,0)_45%)] dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0)_45%)]" />
+
+                {/* Faint watermark element — center background, 8% opacity */}
+                <Filter
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-44 h-44 text-stone-600 dark:text-stone-300 pointer-events-none select-none opacity-[0.08]"
+                  strokeWidth={0.75}
+                />
+
+                <div className="relative p-5 space-y-6 text-sm">
+                  {/* Header — top text zone */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span className="h-8 w-8 rounded-2xl bg-amber-100/80 dark:bg-amber-900/40 flex items-center justify-center shadow-[0_4px_12px_-4px_rgba(217,158,44,0.45)]">
+                        <Filter className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                      </span>
+                      <span className="text-sm font-bold tracking-wide text-stone-800 dark:text-stone-100">
+                        Filters
+                      </span>
+                    </div>
+                    {hasActiveFilters && (
+                      <Badge className="bg-amber-100/90 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 font-semibold px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-widest border border-amber-200/60 dark:border-amber-800/60">
+                        Active
+                      </Badge>
+                    )}
                   </div>
 
-                  {/* Sort by */}
-                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortableField)}>
-                    <SelectTrigger className="h-8 text-xs gap-1.5">
-                      <SelectValue placeholder="Sort by" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="createdAt">Created Date</SelectItem>
-                      <SelectItem value="updatedAt">Updated Date</SelectItem>
-                      <SelectItem value="clientName">Client Name</SelectItem>
-                      <SelectItem value="status">Status</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {/* VIEW — balanced two-option segmented control */}
+                  <section className="space-y-2">
+                    <h4 className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-stone-400 dark:text-stone-500">
+                      <LayoutGrid className="w-3 h-3" />
+                      View
+                    </h4>
+                    <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-stone-100/90 dark:bg-stone-800/70 p-1.5 shadow-[inset_0_1px_3px_rgba(120,90,60,0.12)]">
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('normal')}
+                        className={cn(
+                          'h-9 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all',
+                          viewMode === 'normal'
+                            ? 'bg-white text-stone-800 shadow-[0_6px_16px_-6px_rgba(120,90,60,0.4)]'
+                            : 'text-stone-400 dark:text-stone-500 hover:bg-white/70 dark:hover:bg-stone-700/60 hover:text-stone-700 dark:hover:text-stone-200',
+                        )}
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        <span>Normal</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('by-creator')}
+                        className={cn(
+                          'h-9 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all',
+                          viewMode === 'by-creator'
+                            ? 'bg-white text-stone-800 shadow-[0_6px_16px_-6px_rgba(120,90,60,0.4)]'
+                            : 'text-stone-400 dark:text-stone-500 hover:bg-white/70 dark:hover:bg-stone-700/60 hover:text-stone-700 dark:hover:text-stone-200',
+                        )}
+                      >
+                        <UserIcon className="w-3.5 h-3.5" />
+                        <span>By Creator</span>
+                      </button>
+                    </div>
+                  </section>
 
-                  {/* Sort order */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSortOrder(o => (o === 'desc' ? 'asc' : 'desc'))}
-                    className="h-8 w-full text-xs gap-1.5"
-                  >
-                    {sortOrder === 'desc' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5 rotate-180" />}
-                    <span>{sortOrder === 'desc' ? 'Descending' : 'Ascending'}</span>
-                  </Button>
+                  {/* SORT — field select + symmetric direction control */}
+                  <section className="space-y-2">
+                    <h4 className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-stone-400 dark:text-stone-500">
+                      <TrendingUp className="w-3 h-3" />
+                      Sort
+                    </h4>
+                    <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortableField)}>
+                      <SelectTrigger className="h-10 rounded-2xl text-xs font-semibold border-stone-200/80 dark:border-stone-700 bg-white/80 dark:bg-stone-800/80 shadow-[0_4px_12px_-6px_rgba(120,90,60,0.3)]">
+                        <SelectValue placeholder="Sort by" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="createdAt">Created Date</SelectItem>
+                        <SelectItem value="updatedAt">Updated Date</SelectItem>
+                        <SelectItem value="clientName">Client Name</SelectItem>
+                        <SelectItem value="status">Status</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-stone-100/90 dark:bg-stone-800/70 p-1.5 shadow-[inset_0_1px_3px_rgba(120,90,60,0.12)]">
+                      <button
+                        type="button"
+                        onClick={() => setSortOrder('asc')}
+                        className={cn(
+                          'h-9 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all',
+                          sortOrder === 'asc'
+                            ? 'bg-white text-stone-800 shadow-[0_6px_16px_-6px_rgba(120,90,60,0.4)]'
+                            : 'text-stone-400 dark:text-stone-500 hover:bg-white/70 dark:hover:bg-stone-700/60 hover:text-stone-700 dark:hover:text-stone-200',
+                        )}
+                      >
+                        <TrendingUp className="w-3.5 h-3.5 rotate-180" />
+                        <span>Ascending</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSortOrder('desc')}
+                        className={cn(
+                          'h-9 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all',
+                          sortOrder === 'desc'
+                            ? 'bg-white text-stone-800 shadow-[0_6px_16px_-6px_rgba(120,90,60,0.4)]'
+                            : 'text-stone-400 dark:text-stone-500 hover:bg-white/70 dark:hover:bg-stone-700/60 hover:text-stone-700 dark:hover:text-stone-200',
+                        )}
+                      >
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        <span>Descending</span>
+                      </button>
+                    </div>
+                  </section>
 
-                  {/* Date range — calendar picker */}
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>Date Range</span>
-                    </label>
+                  {/* DATE RANGE — floating calendar object */}
+                  <section className="space-y-2">
+                    <h4 className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-stone-400 dark:text-stone-500">
+                      <Calendar className="w-3 h-3" />
+                      Date Range
+                    </h4>
                     <CalendarComponent
                       mode="range"
                       selected={{
@@ -970,14 +1049,22 @@ export default function LeadManagementPage() {
                         setRawFilterEnd(range?.to?.toISOString());
                       }}
                       numberOfMonths={1}
-                      className="rounded-md border"
+                      className="rounded-2xl border border-stone-200/70 dark:border-stone-700/70 bg-white/70 dark:bg-stone-800/70 w-full mx-auto shadow-[0_8px_20px_-10px_rgba(120,90,60,0.3)]"
                     />
-                  </div>
+                    {(filterStart || filterEnd) && (
+                      <div className="rounded-xl bg-white/80 dark:bg-stone-800/80 border border-amber-200/70 dark:border-amber-800/60 px-3 py-2 text-center shadow-[0_6px_16px_-8px_rgba(120,90,60,0.35)]">
+                        <span className="text-[11px] font-semibold text-stone-700 dark:text-stone-200">
+                          {filterStart ? format(new Date(filterStart), 'dd MMM') : 'Start'} → {filterEnd ? format(new Date(filterEnd), 'dd MMM yyyy') : 'Now'}
+                        </span>
+                      </div>
+                    )}
+                  </section>
 
-                  {/* Clear filters */}
-                  {hasActiveFilters && (
+                  {/* Footer — bottom text zone, balanced pair */}
+                  <div className="grid grid-cols-2 gap-2.5 pt-1">
                     <Button
-                      variant="ghost"
+                      type="button"
+                      variant="outline"
                       size="sm"
                       onClick={() => {
                         setFilterStart(undefined);
@@ -985,25 +1072,23 @@ export default function LeadManagementPage() {
                         setRawFilterStart(undefined);
                         setRawFilterEnd(undefined);
                       }}
-                      className="h-8 w-full text-xs gap-1.5"
+                      disabled={!hasActiveFilters}
+                      className="h-10 rounded-2xl text-xs font-semibold gap-1.5 border-stone-200/80 dark:border-stone-700 bg-white/80 dark:bg-stone-800/80 text-stone-500 dark:text-stone-400 shadow-[0_6px_16px_-8px_rgba(120,90,60,0.3)] hover:bg-stone-50 hover:text-stone-700 disabled:shadow-none"
                     >
                       <X className="w-3.5 h-3.5" />
-                      <span>Clear Filters</span>
+                      <span>Clear</span>
                     </Button>
-                  )}
-
-                  {/* Export */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExportLeads}
-                    disabled={isFetching}
-                    className="h-8 w-full text-xs gap-1.5"
-                  >
-                    {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                    <span>Export CSV</span>
-                  </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleExportLeads}
+                      disabled={isFetching}
+                      className="h-10 rounded-2xl text-xs font-semibold gap-1.5 border-0 bg-gradient-to-b from-amber-400 to-orange-500 text-white shadow-[0_10px_24px_-8px_rgba(217,119,6,0.55)] hover:from-amber-500 hover:to-orange-600"
+                    >
+                      {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                      <span>Export CSV</span>
+                    </Button>
+                  </div>
                 </div>
               </PopoverContent>
             </Popover>
@@ -1348,8 +1433,8 @@ const LeadFormDialog: React.FC<LeadFormDialogProps> = ({ isOpen, onOpenChange, o
                 <Label htmlFor="isHot" className="text-sm font-medium leading-none opacity-0 select-none">Hot Lead</Label>
                 <div
                   className={`flex items-center justify-between w-full px-3 py-2 border rounded-lg transition-colors cursor-pointer h-10 ${isHot
-                      ? 'border-red-500 bg-red-50 dark:bg-red-900/10'
-                      : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                    ? 'border-red-500 bg-red-50 dark:bg-red-900/10'
+                    : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                     }`}
                   onClick={() => setIsHot(prev => !prev)}
                 >
@@ -1772,8 +1857,8 @@ const LeadDetailsDialog: React.FC<LeadDetailsDialogProps> = (props) => {
                 ) : (
                   <span
                     className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full transition-colors duration-200 ${formData.isHot
-                        ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
-                        : 'bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-700 dark:text-gray-400'
+                      ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
+                      : 'bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-700 dark:text-gray-400'
                       }`}
                   >
                     {formData.isHot ? '🔥 HIGH PRIORITY' : 'STANDARD'}
