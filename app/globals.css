@@ -349,6 +349,13 @@
       filter: blur(0);
     }
 
+    /* Hold fully visible into the exit phase */
+    92% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+
     /* Exit through top */
     100% {
       opacity: 0;
