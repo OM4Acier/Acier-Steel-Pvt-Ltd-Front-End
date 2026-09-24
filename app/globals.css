@@ -316,7 +316,12 @@
     animation-name: leadCardView;
     animation-duration: 1ms;
     animation-timing-function: linear;
-    animation-fill-mode: both;
+    /* fill-mode deliberately `none` (NOT `both`): with `both`, Chrome can
+       leave the card stuck at the 0% keyframe (opacity 0 / blur / scaled)
+       after the async leads mount until the first scroll event ticks the
+       view() timeline — cards flashed "initial state" on load. `none` lets
+       the visible base rule above hold until the timeline really starts. */
+    animation-fill-mode: none;
     animation-timeline: view(block);
     animation-range: entry 0% exit 100%;
     will-change: transform, opacity, filter;
