@@ -323,7 +323,13 @@
        the visible base rule above hold until the timeline really starts. */
     animation-fill-mode: none;
     animation-timeline: view(block);
-    animation-range: entry 0% exit 100%;
+    /* ROOT-CAUSE FIX for the first card (scroll-top): with entry 0%, the top
+       card has already exited its entry range (its 100% = viewport bottom)
+       the instant it renders, so Chrome resolves the animation to the 100%
+       (exit) keyframe → opacity 0 → invisible until first scroll. Starting
+       entry at 30% keeps the top card inside the active range so it stays
+       at its mid-animation state (opacity 1, transform none) until scrolled. */
+    animation-range: entry 30% exit 100%;
     will-change: transform, opacity, filter;
   }
 
