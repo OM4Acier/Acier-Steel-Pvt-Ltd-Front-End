@@ -306,6 +306,16 @@
     border: 2px solid #1f2937;
 }
 
+/* Multi-card lists still scroll, but the track is hidden to match the
+   fade-mask aesthetic. Single-card sections never get this class. */
+.lead-scroll-list {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.lead-scroll-list::-webkit-scrollbar {
+  display: none;
+}
+
 .lead-scroll-card {
   opacity: 1;
   transform: none;
@@ -313,38 +323,18 @@
 }
 
 @supports (animation-timeline: view()) {
-  /*
-    Two independent view() animations instead of one spanning range.
-
-    Why split:
-    ───────────
-    With a single `animation-range: entry 30% exit 100%`, the animation
-    spans from "element is 30% into entering from below" all the way to
-    "element has fully exited above". On first paint (before the scroll
-    container has committed its final layout), Chrome resolves the whole
-    range against stale scrollport metrics and the top card snaps to
-    whichever endpoint Chrome picks — opacity 0.
-
-    With two animations:
-      • `enter` only runs during the element's OWN entry range.
-        At scroll-top the first card is already PAST its entry range,
-        so the enter animation is inactive → base styles hold (visible).
-      • `exit` only runs during the element's OWN exit range.
-        At scroll-top the first card is at exit 0% (start) → visible
-        keyframe → visible.
-
-    Neither animation can land the first card on an invisible keyframe
-    at any scroll position — including scroll-back-to-top, because the
-    result is a pure function of scroll position with no internal state
-    to "reset".
-  */
   .anim-ready .lead-scroll-card {
     animation-name: leadCardEnter, leadCardExit;
     animation-duration: 1ms, 1ms;
     animation-timing-function: linear, linear;
     animation-fill-mode: none, none;
     animation-timeline: view(), view();
-    animation-range: entry 0% entry 100%, exit 0% exit 100%;
+    /* `enter` runs across the contain range, `exit` across the exit range.
+       At scroll-top the first card sits at enter 100% (the visible
+       keyframe), never on an invisible 0% key — and single-card sections
+       never get `.anim-ready` (gated by LeadScrollList `scrollable`),
+       so they render as plain cards. */
+    animation-range: contain 0% contain 100%, exit 0% exit 100%;
   }
 
   /* Card coming in from below */

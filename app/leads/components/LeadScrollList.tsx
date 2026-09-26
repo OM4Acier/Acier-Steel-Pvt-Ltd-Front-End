@@ -5,24 +5,28 @@ import { useEffect, useState, type ReactNode } from "react";
 /**
  * LeadScrollList
  * --------------
- * Scroll container for the grouped lead cards. It owns the `anim-ready`
- * class gate that defers the scroll-driven CSS animations until after the
- * first layout commit, so Chrome resolves the view() timelines against final
- * scrollport metrics instead of stale first-paint ones.
+ * Scroll container for the grouped lead cards.
+ *
+ * `scrollable` drives three things at once: the scroll class on the list,
+ * the `anim-ready` gate, and (at the call site) whether the two edge
+ * gradients render. When false — a single-card section — the container is
+ * `overflow-visible` with no height cap, no `anim-ready`, and no view()
+ * animation: i.e. a plain card.
  */
 export function LeadScrollList({
   children,
   labelledBy,
+  scrollable,
 }: {
   children: ReactNode;
   labelledBy: string;
+  scrollable: boolean;
 }) {
   const [animReady, setAnimReady] = useState(false);
 
   useEffect(() => {
-    // Double RAF: wait for the layout commit + timeline initialisation
-    // before the CSS animation attaches. Without this, view() resolves
-    // against stale scrollport metrics and the top card snaps to 0%.
+    // No scroll → no view() timeline → skip the RAF gate entirely.
+    if (!scrollable) return;
     let r2 = 0;
     const r1 = requestAnimationFrame(() => {
       r2 = requestAnimationFrame(() => setAnimReady(true));
@@ -31,14 +35,21 @@ export function LeadScrollList({
       cancelAnimationFrame(r1);
       cancelAnimationFrame(r2);
     };
-  }, []);
+  }, [scrollable]);
 
   return (
     <div
-      className={`max-h-[850px] overflow-y-auto p-4 flex flex-col gap-4 ${
-        animReady ? "anim-ready" : ""
-      }`}
-      tabIndex={0}
+      className={[
+        "p-4 flex flex-col gap-4",
+        // Single card: no cap, no scroll, no gutter, no track.
+        scrollable
+          ? "lead-scroll-list max-h-[850px] overflow-y-auto"
+          : "overflow-visible",
+        scrollable && animReady ? "anim-ready" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      tabIndex={scrollable ? 0 : -1}
       role="list"
       aria-label={labelledBy}
     >
