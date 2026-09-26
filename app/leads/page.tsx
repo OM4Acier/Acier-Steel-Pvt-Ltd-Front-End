@@ -750,7 +750,7 @@ export default function LeadManagementPage() {
     if (sectionLeads.length === 0) return null;
 
     return (
-      <Card className="self-start rounded-2xl overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
+      <Card className="self-start min-h-[280px] rounded-2xl overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
         <CardHeader
           className={`px-4 py-2 text-white text-lg rounded-sm font-semibold flex items-start justify-between rounded-t-xl flex-shrink-0 gap-3 ${color.replace(
             "border-",
