@@ -748,6 +748,7 @@ export default function LeadManagementPage() {
     stats?: { inProgress: number; completed: number; closed: number },
   ) => {
     if (sectionLeads.length === 0) return null;
+    const isScrollable = sectionLeads.length > 1;
 
     return (
       <Card className="self-start min-h-[280px] rounded-2xl overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
@@ -798,7 +799,7 @@ export default function LeadManagementPage() {
         </CardHeader>
 
         <CardContent className="relative p-0">
-          <LeadScrollList labelledBy={`${title} leads`}>
+          <LeadScrollList labelledBy={`${title} leads`} scrollable={isScrollable}>
             {sectionLeads.map((lead) => (
               <div key={lead.id} role="listitem" className="lead-scroll-card">
                 <LeadCard
@@ -834,7 +835,10 @@ export default function LeadManagementPage() {
             ))}
           </LeadScrollList>
 
-          {/* Fixed viewport edges */}
+          {/* Edge fades mask scroll content — hide them when there's
+              nothing to scroll. */}
+          {isScrollable && (
+            <>
           <div
             aria-hidden="true"
             className="
@@ -860,6 +864,8 @@ export default function LeadManagementPage() {
         dark:from-gray-800 dark:via-gray-800/95
       "
           />
+            </>
+          )}
         </CardContent>
       </Card>
     );
