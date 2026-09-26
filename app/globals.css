@@ -308,74 +308,81 @@
 
 .lead-scroll-card {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: none;
+  contain: layout style paint;
 }
 
 @supports (animation-timeline: view()) {
-  .lead-scroll-card {
-    animation-name: leadCardView;
-    animation-duration: 1ms;
-    animation-timing-function: linear;
-    /* fill-mode deliberately `none` (NOT `both`): with `both`, Chrome can
-       leave the card stuck at the 0% keyframe (opacity 0 / blur / scaled)
-       after the async leads mount until the first scroll event ticks the
-       view() timeline — cards flashed "initial state" on load. `none` lets
-       the visible base rule above hold until the timeline really starts. */
-    animation-fill-mode: none;
-    animation-timeline: view(block);
-    /* ROOT-CAUSE FIX for the first card (scroll-top): with entry 0%, the top
-       card has already exited its entry range (its 100% = viewport bottom)
-       the instant it renders, so Chrome resolves the animation to the 100%
-       (exit) keyframe → opacity 0 → invisible until first scroll. Starting
-       entry at 30% keeps the top card inside the active range so it stays
-       at its mid-animation state (opacity 1, transform none) until scrolled. */
-    animation-range: entry 30% exit 100%;
-    will-change: transform, opacity, filter;
+  /*
+    Two independent view() animations instead of one spanning range.
+
+    Why split:
+    ───────────
+    With a single `animation-range: entry 30% exit 100%`, the animation
+    spans from "element is 30% into entering from below" all the way to
+    "element has fully exited above". On first paint (before the scroll
+    container has committed its final layout), Chrome resolves the whole
+    range against stale scrollport metrics and the top card snaps to
+    whichever endpoint Chrome picks — opacity 0.
+
+    With two animations:
+      • `enter` only runs during the element's OWN entry range.
+        At scroll-top the first card is already PAST its entry range,
+        so the enter animation is inactive → base styles hold (visible).
+      • `exit` only runs during the element's OWN exit range.
+        At scroll-top the first card is at exit 0% (start) → visible
+        keyframe → visible.
+
+    Neither animation can land the first card on an invisible keyframe
+    at any scroll position — including scroll-back-to-top, because the
+    result is a pure function of scroll position with no internal state
+    to "reset".
+  */
+  .anim-ready .lead-scroll-card {
+    animation-name: leadCardEnter, leadCardExit;
+    animation-duration: 1ms, 1ms;
+    animation-timing-function: linear, linear;
+    animation-fill-mode: none, none;
+    animation-timeline: view(), view();
+    animation-range: entry 0% entry 100%, exit 0% exit 100%;
   }
 
-  @keyframes leadCardView {
-    /* Enter from bottom */
-    0% {
+  /* Card coming in from below */
+  @keyframes leadCardEnter {
+    from {
       opacity: 0;
       transform: translateY(35px) scale(0.84);
-      filter: blur(2px);
+      filter: blur(1.5px);
     }
-
-    /* Smoothly settle */
-    18% {
+    to {
       opacity: 1;
-      transform: translateY(0) scale(1);
-      filter: blur(0);
+      transform: none;
+      filter: none;
     }
+  }
 
-    /* Main viewing area */
-    70% {
+  /* Card leaving through the top */
+  @keyframes leadCardExit {
+    from {
       opacity: 1;
-      transform: translateY(0) scale(1);
-      filter: blur(0);
+      transform: none;
+      filter: none;
     }
-
-    /* Hold fully visible into the exit phase */
-    92% {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-      filter: blur(0);
-    }
-
-    /* Exit through top */
-    100% {
+    to {
       opacity: 0;
       transform: translateY(-22px) scale(0.86);
-      filter: blur(3px);
+      filter: blur(1.5px);
     }
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lead-scroll-card {
+  .lead-scroll-card,
+  .anim-ready .lead-scroll-card {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
     filter: none !important;
+    contain: none;
   }
 }
