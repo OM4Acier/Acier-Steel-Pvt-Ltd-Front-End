@@ -35,6 +35,7 @@ import { NAV_COLOR_MAP } from '@/lib/config/colors';
 import { leadsApi } from '@/lib/api/endpoints/leadsApi';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- WIP: LeadCardV2 swap-in (commented usage below)
 import LeadCardV2 from './components/LeadCardV2';
+import { LeadScrollList } from './components/LeadScrollList';
 
 const leadApiService = leadsApi;
 
@@ -797,12 +798,7 @@ export default function LeadManagementPage() {
         </CardHeader>
 
         <CardContent className="relative p-0">
-          <div
-            className="max-h-[850px] overflow-y-auto p-4 flex flex-col gap-4"
-            tabIndex={0}
-            role="list"
-            aria-label={`${title} leads`}
-          >
+          <LeadScrollList labelledBy={`${title} leads`}>
             {sectionLeads.map((lead) => (
               <div key={lead.id} role="listitem" className="lead-scroll-card">
                 <LeadCard
@@ -836,7 +832,7 @@ export default function LeadManagementPage() {
                 /> */}
               </div>
             ))}
-          </div>
+          </LeadScrollList>
 
           {/* Fixed viewport edges */}
           <div
@@ -904,7 +900,7 @@ export default function LeadManagementPage() {
                   className={cn(
                     "h-8 rounded-full text-xs font-semibold gap-1.5 border border-stone-200 dark:border-stone-700 bg-[#fdf9f3] dark:bg-stone-800/90 shadow-[0_2px_10px_-2px_rgba(120,90,60,0.18)] transition-all hover:shadow-[0_4px_16px_-2px_rgba(120,90,60,0.28)]",
                     hasActiveFilters &&
-                      "border-amber-300 bg-amber-50 text-amber-800 dark:text-amber-300 shadow-[0_2px_14px_-2px_rgba(217,158,44,0.4)]",
+                    "border-amber-300 bg-amber-50 text-amber-800 dark:text-amber-300 shadow-[0_2px_14px_-2px_rgba(217,158,44,0.4)]",
                   )}
                 >
                   <Filter className="w-3.5 h-3.5" />
