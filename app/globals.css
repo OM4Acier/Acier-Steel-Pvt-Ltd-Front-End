@@ -323,47 +323,28 @@
 }
 
 @supports (animation-timeline: view()) {
-  .anim-ready .lead-scroll-card {
-    animation-name: leadCardEnter, leadCardExit;
-    animation-duration: 1ms, 1ms;
-    animation-timing-function: linear, linear;
-    animation-fill-mode: none, none;
-    animation-timeline: view(), view();
-    /* `enter` runs across the contain range, `exit` across the exit range.
-       At scroll-top the first card sits at enter 100% (the visible
-       keyframe), never on an invisible 0% key — and single-card sections
-       never get `.anim-ready` (gated by LeadScrollList `scrollable`),
-       so they render as plain cards. */
-    animation-range: contain 0% contain 100%, exit 0% exit 100%;
-  }
+ .anim-ready .lead-scroll-card {
+  animation-name: leadCardEnter, leadCardExit;
+  animation-duration: 1ms, 1ms;
+  animation-timing-function: linear, linear;
+  animation-fill-mode: none, none;
+  animation-timeline: view(), view();
 
-  /* Card coming in from below */
-  @keyframes leadCardEnter {
-    from {
-      opacity: 0;
-      transform: translateY(35px) scale(0.84);
-      filter: blur(1.5px);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-      filter: none;
-    }
-  }
+  /* entry: physical entry phase (bottom of scrollport → fully in)
+     exit:  physical exit phase (top of scrollport → fully out)
+     Between them: no animation active → base styles → opacity 1. */
+  animation-range: entry 0% entry 100%, exit 0% exit 100%;
+}
 
-  /* Card leaving through the top */
-  @keyframes leadCardExit {
-    from {
-      opacity: 1;
-      transform: none;
-      filter: none;
-    }
-    to {
-      opacity: 0;
-      transform: translateY(-22px) scale(0.86);
-      filter: blur(1.5px);
-    }
-  }
+@keyframes leadCardEnter {
+  from { opacity: 0; transform: translateY(35px) scale(0.84); filter: blur(1.5px); }
+  to   { opacity: 1; transform: none;                         filter: none;         }
+}
+
+@keyframes leadCardExit {
+  from { opacity: 1; transform: none;                          filter: none;         }
+  to   { opacity: 0; transform: translateY(-22px) scale(0.86); filter: blur(1.5px);  }
+}
 }
 
 @media (prefers-reduced-motion: reduce) {
