@@ -35,7 +35,7 @@ import {
   ShoppingBag,
   User,
 } from 'lucide-react';
-import type { UserRole } from '@/types/rbac.types';
+import { canRole, type NewPermission } from './permissions';
 import { NavColor } from './colors';
 
 // ---------------------------------------------------------------------------
@@ -51,10 +51,27 @@ import { NavColor } from './colors';
 export interface RouteConfig {
   /** Exact path. matchRoute() also prefix-matches nested routes. */
   path: string;
-  /** Roles that may access this route. Empty = any authenticated user. */
-  allowedRoles: UserRole[];
-  /** Redirect target when authenticated but role doesn't match. */
-  unauthorizedRedirect: string;
+  /**
+   * Permission required to view this route, or the literal "public".
+   *
+   * Required on every entry — there is no `?` and no `null`. Omitting it is a
+   * compile error, so "I forgot the permission" can never become a silent
+   * hole. `null`/`undefined` were rejected for exactly this reason: they make
+   * a forgotten field indistinguishable from an intentional one.
+   *
+   * Use "public" ONLY for routes that genuinely need no role check
+   * (`/`, `/account`, `/login`, `/403`, `/404`, and the dev-only `/test`
+   * routes). Anything else takes a real Permission and is enforced by the
+   * AppShell guard.
+   */
+  permission: NewPermission | 'public';
+  /**
+   * 'internal' — a route in this app, guarded by the AppShell effect.
+   * 'external' — an off-site URL used for nav/shortcut links only.
+   *             matchRoute() can never match these (it prefix-matches
+   *             usePathname()), so the guard must skip them explicitly.
+   */
+  kind: 'internal' | 'external';
   /** Nav label — omit to hide from menus. */
   label?: string;
   /** Direct lucide-react component. No separate icon map needed. */
@@ -107,20 +124,20 @@ export const PUBLIC_PATHS: string[] = [
 // ---------------------------------------------------------------------------
 
 export const PROTECTED_ROUTES: RouteConfig[] = [
-  {
+{
     path:                 '/',
-    allowedRoles:         ['super-admin', 'sales', 'accountant', 'operations', 'purchase-entry'],
-    unauthorizedRedirect: ROUTES.LOGIN,
+    permission: 'public',
+    kind: 'internal',
     label:                'Dashboard',
     icon:                 LayoutDashboard,
     navColor:             'blue',
     showInNav:            true,
     navOrder:             1,
   },
-  {
+{
     path:                 '/attendance',
-    allowedRoles:         ['super-admin', 'sales', 'accountant', 'operations', 'purchase-entry'],
-    unauthorizedRedirect: ROUTES.LOGIN,
+    permission: 'attendance:read',
+    kind: 'internal',
     label:                'Attendance',
     icon:                 CheckCircle2,
     navColor:             'green',
@@ -128,90 +145,101 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     navOrder:             2,
 
   },
-  {
+{
     path:                 '/orders',
-    allowedRoles:         ['super-admin', 'sales', 'accountant', 'operations'],
-    unauthorizedRedirect: ROUTES.LOGIN,
+    permission: 'orders:read',
+    kind: 'internal',
     label:                'Orders',
     icon:                 Briefcase,
     navColor:             'emerald',
     showInNav:            true,
     navOrder:             3,
   },
-  {
+{
     path:                 'https://mytaskacier.web.app/',
-    allowedRoles:         ['super-admin', 'sales', 'accountant', 'operations', 'purchase-entry'],
-    unauthorizedRedirect: ROUTES.LOGIN,
+    permission: 'public',
+    kind: 'external',
     label:                'One Time Work',
     icon:                 ListTodo,
     navColor:             'violet',
     showInNav:            true,
     navOrder:             4,
   },
-  {
+{
+    // Longest path first: /leads/v2 must precede /leads so matchRoute's
+    // prefix fallback cannot swallow it.
+    path:                 '/leads/v2',
+    permission:           'leads:read',
+    kind:                 'internal',
+    label:                'Leads (V2)',
+    icon:                 TrendingUp,
+    navColor:             'red',
+    showInNav:            false,
+  },
+{
     path:                 '/leads-center',
-    allowedRoles:         ['super-admin', 'sales'],
-    unauthorizedRedirect: ROUTES.LOGIN,
+    permission: 'leads-center:read',
+    kind: 'internal',
     label:                'Leads Center',
     icon:                 BarChart3,
     navColor:             'amber',
     showInNav:            true,
     navOrder:             5,
   },
-  {
+{
     path:                 '/leads',
-    allowedRoles:         ['super-admin', 'sales'],
-    unauthorizedRedirect: ROUTES.LOGIN,
+    permission: 'leads:read',
+    kind: 'internal',
     label:                'Leads',
     icon:                 TrendingUp,
     navColor:             'red',
     showInNav:            true,
     navOrder:             6,
   },
-  {
+{
     path:                 '/purchases',
-    allowedRoles:         [ 'accountant', 'purchase-entry', 'operations'],
-    unauthorizedRedirect: ROUTES.LOGIN,
+    permission: 'purchases:read',
+    kind: 'internal',
     label:                'Purchases',
     icon:                 ShoppingCart,
     navColor:             'fuchsia',
     showInNav:            true,
     navOrder:             7,
   },
-  {
+{
     path:                 '/visitors',
-    allowedRoles:         ['super-admin', 'sales', 'accountant', 'operations', 'purchase-entry'],
-    unauthorizedRedirect: ROUTES.LOGIN,
+    permission: 'visitors:read',
+    kind: 'internal',
     label:                'Visitor Records',
     icon:                 UserPlus,
     navColor:             'teal',
     showInNav:            true,
     navOrder:             8,
   },
-  {
+{
     path:                 '/reports',
-    allowedRoles:         ['super-admin'],
-    unauthorizedRedirect: ROUTES.HOME,
+    permission: 'reports:read',
+    kind: 'internal',
     label:                'Reports',
     icon:                 BarChart3,
     navColor:             'gray',
     showInNav:            true,
     navOrder:             9,
   },
-  {
+{
     path:                 ROUTES.USERS,
-    allowedRoles:         ['super-admin'],
-    unauthorizedRedirect: ROUTES.HOME,
+    permission:           'users:read',
+    kind:                 'internal',
     label:                'Users',
     icon:                 Users,
     navColor:             'indigo',
     showInNav:            true,
     navOrder:             10,
   },
-  {
+{
     path:                 '/customers',
-    allowedRoles:         ['super-admin', 'accountant','sales'],
-    unauthorizedRedirect: ROUTES.HOME,
+    permission: 'customers:read',
+    kind: 'internal',
     label:                'Customer',
     icon:                 Package,
     navColor:             'cyan', // Updated to Cyan
@@ -219,25 +247,40 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     navOrder:             11,
     navBadge:             'New',
   },
-  {
+{
     path:                 ROUTES.ACCOUNT,
-    allowedRoles:         [], // any authenticated user
-    unauthorizedRedirect: ROUTES.LOGIN,
+    // "public" here means "no role check", not "unauthenticated" — AppShell
+    // still requires a signed-in user for every non-"/login" route.
+    permission:           'public',
+    kind:                 'internal',
     label:                'Account',
     icon:                 User,
     showInNav:            false,
   },
-  {
+{
     path:                 ROUTES.SHEET_HISTORY,
-    allowedRoles:         ['super-admin', 'sales', 'accountant', 'operations'],
-    unauthorizedRedirect: ROUTES.HOME,
+    permission:           'sheet-history:read',
+    kind:                 'internal',
     label:                'Sheet History',
     icon:                 FileText,
     navColor:             'sky',
     showInNav:            true,
     navOrder:             12,
   },
-];
+{
+    // Was MISSING from PROTECTED_ROUTES entirely — the nav entry for tasks is
+    // the external mytaskacier URL above, but app/tasks/page.tsx is a real
+    // route. Without this entry the fail-closed guard would 404 every user,
+    // including super-admin, on direct URL entry.
+    path:                 '/tasks',
+    permission:           'tasks:read',
+    kind:                 'internal',
+    label:                'Tasks',
+    icon:                 ListTodo,
+    navColor:             'violet',
+    showInNav:            false,
+  },
+      ];
 
 
 // ---------------------------------------------------------------------------
@@ -256,14 +299,20 @@ export function matchRoute(pathname: string): RouteConfig | undefined {
   );
 }
 
-export function roleCanAccess(route: RouteConfig, role: UserRole): boolean {
-  if (role === 'super-admin') return true;
-  if (route.allowedRoles.length === 0) return true;
-  return route.allowedRoles.includes(role);
+/**
+ * Can this role view this route?
+ *
+ * Delegates to canRole so the route guard (C6) and the nav filter can never
+ * disagree — same resolver, same grants. `public` routes are visible to any
+ * signed-in user.
+ */
+export function roleCanAccess(route: RouteConfig, role: string | null | undefined): boolean {
+  if (route.permission === 'public') return true;
+  return canRole(role, route.permission);
 }
 
 /** All nav items visible to role, sorted by navOrder. */
-export function getNavItems(role: UserRole): RouteConfig[] {
+export function getNavItems(role: string | null | undefined): RouteConfig[] {
   return PROTECTED_ROUTES
     .filter((r) => r.showInNav && r.label && roleCanAccess(r, role))
     .sort((a, b) => (a.navOrder ?? 99) - (b.navOrder ?? 99));
@@ -287,7 +336,7 @@ export interface CreateShortcut {
    * its create dialog. Also makes the URL deep-linkable.
    */
   actionParam?: string;
-  allowedRoles: UserRole[];
+  allowedRoles: string[];
   /** Same NavColor token as routes.ts — resolved by NAV_COLOR_MAP */
   color:        NavColor;
 }
@@ -373,7 +422,7 @@ export const CREATE_SHORTCUTS: CreateShortcut[] = [
 // Helper
 // ---------------------------------------------------------------------------
 
-export function getCreateShortcuts(role: UserRole): CreateShortcut[] {
+export function getCreateShortcuts(role: string): CreateShortcut[] {
   return CREATE_SHORTCUTS.filter(
     (s) => s.allowedRoles.length === 0 || s.allowedRoles.includes(role)
   );
