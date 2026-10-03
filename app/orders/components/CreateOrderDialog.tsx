@@ -57,7 +57,6 @@ import { CustomerDialog, DialogMode } from '../../customers/components/CustomerD
 
 import { QuotationPrefillPayload } from '../types';
 import { buildCustomerInfoBlock, replaceCustomerField, replaceCustomerInfoBlock } from '../customerInfoBlock';
-import { canDo } from '@/lib/auth/access';
 
 interface CreateOrderDialogProps {
   isOpen: boolean;
@@ -747,10 +746,10 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
 
   const handleSubmit = async () => {
     if (!currentUserProfile) return;
-    if (!canDo(currentUserProfile, 'orders:create')) {
-      onShowMessage({ type: 'error', text: 'You do not have permission to create orders. Permission required: orders:create' });
-      return;
-    }
+    // orders:create is enforced by <RoleGate need="orders:create"> on the
+    // "New Order" trigger in app/orders/page.tsx. The submit button is no
+    // longer reachable without passing that gate, so the old client-side
+    // canDo() toast is redundant. The backend remains the real enforcement.
     if (createdOrderDeoNo) {
       await handleRetryFileUpload();
       return;

@@ -57,10 +57,22 @@ export function RoleGate({
   if (ok) return <>{children}</>;
 
   if (mode === 'disable') {
+    // <fieldset disabled> natively disables EVERY descendant control —
+    // pointer AND keyboard. The previous <div aria-disabled
+    // className="pointer-events-none opacity-50"> only killed pointer events:
+    // the inner <button> stayed focusable and still fired onClick on Enter or
+    // Space. That was a real hole on the orders Delete button, which carries
+    // no `disabled` attribute of its own.
+    //
+    // Why NOT className="contents" on the fieldset: `display: contents`
+    // removes the element's own box, and opacity only paints on a box — the
+    // dimming silently stops working while the disabling still works. The
+    // classes below keep the fieldset inline (Tailwind preflight already
+    // zeroes fieldset margin/padding/border) so opacity applies.
     return (
-      <div aria-disabled="true" className="pointer-events-none opacity-50">
+      <fieldset disabled className="inline-flex opacity-50">
         {children}
-      </div>
+      </fieldset>
     );
   }
 
