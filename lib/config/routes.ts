@@ -36,6 +36,9 @@ import {
   User,
   ShieldAlert,
   FileQuestion,
+  LogIn,
+  KeyRound,
+  FlaskConical,
 } from 'lucide-react';
 import { canRole, type NewPermission } from './permissions';
 import { NavColor } from './colors';
@@ -282,10 +285,10 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     navColor:             'violet',
     showInNav:            false,
   },
-  {
-    // The AppShell guard redirects denied users here. MUST be 'public' - a
-    // route requiring a permission could bounce the user back to /403 in a
-    // loop. Same for /404.
+{
+    // The C6 guard redirects denied users here. MUST be "public" — a route
+    // that required a permission could bounce the user straight back to /403
+    // in a loop. Same for /404.
     path:                 '/403',
     permission:           'public',
     kind:                 'internal',
@@ -293,14 +296,53 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     icon:                 ShieldAlert,
     showInNav:            false,
   },
-  {
-    // Fail-closed target for unknown paths. Defining app/404/page.tsx also
-    // overwrites the host's generated out/404.html.
+{
+    // Fail-closed target for unknown paths. Also overwrites the host's
+    // out/404.html — see app/404/page.tsx.
     path:                 '/404',
     permission:           'public',
     kind:                 'internal',
     label:                'Not Found',
-    icon:                 FileQuestion,
+    icon:                FileQuestion,
+    showInNav:            false,
+  },
+{
+    // MUST be registered. The AppShell guard derives isPublicRoute from THIS
+    // registry, so an unregistered '/login' resolves to route === undefined.
+    // A signed-out visitor then bounces /login -> /404 -> /login forever.
+    path:                 ROUTES.LOGIN,
+    permission:           'public',
+    kind:                 'internal',
+    label:                'Login',
+    icon:                 LogIn,
+    showInNav:            false,
+  },
+  {
+    path:                 ROUTES.FORGOT_PASSWORD,
+    permission:           'public',
+    kind:                 'internal',
+    label:                'Forgot Password',
+    icon:                 KeyRound,
+    showInNav:            false,
+  },
+  {
+    // DEV PAGES — registered as 'public' only so the fail-closed guard does
+    // not 404 them for signed-in users. They have no role check and no nav
+    // entry. C10 deletes these pages AND these two entries; they should not
+    // be in a production bundle at all.
+    path:                 '/test',
+    permission:           'public',
+    kind:                 'internal',
+    label:                'Test',
+    icon:                 FlaskConical,
+    showInNav:            false,
+  },
+  {
+    path:                 '/test-api',
+    permission:           'public',
+    kind:                 'internal',
+    label:                'Test API',
+    icon:                 FlaskConical,
     showInNav:            false,
   },
 ];
@@ -314,11 +356,26 @@ export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.includes(pathname);
 }
 
+/**
+ * Strip trailing slashes so '/orders/' and '/orders' resolve identically.
+ *
+ * matchRoute() prefix-matches on `path + '/'`, so '/orders/' only matched by
+ * accident: the prefix branch tested '/orders/'.startsWith('/orders/') -> true.
+ * An unnormalised '/leads/v2/' however would prefix-match back to '/leads'
+ * instead of its own entry. Normalising inside matchRoute() makes every caller
+ * correct without each one remembering to do it.
+ */
+export function normalizePath(pathname: string): string {
+  const trimmed = pathname.replace(/\/+$/, '');
+  return trimmed === '' ? '/' : trimmed;
+}
+
 export function matchRoute(pathname: string): RouteConfig | undefined {
-  const exact = PROTECTED_ROUTES.find((r) => r.path === pathname);
+  const path = normalizePath(pathname);
+  const exact = PROTECTED_ROUTES.find((r) => r.path === path);
   if (exact) return exact;
   return PROTECTED_ROUTES.find(
-    (r) => !r.path.includes('?') && pathname.startsWith(r.path + '/')
+    (r) => !r.path.includes('?') && path.startsWith(r.path + '/')
   );
 }
 

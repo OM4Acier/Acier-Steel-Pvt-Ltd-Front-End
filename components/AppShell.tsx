@@ -18,10 +18,12 @@
 
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useAuth, useUser, useClerk } from '@clerk/react';
 import { usePathname, useRouter } from 'next/navigation';
 import { requestRegistry } from '@/lib/request-registry';
+import { matchRoute } from '@/lib/config/routes';
+import { canRole } from '@/lib/config/permissions';
 import { usePermissionStore } from '@/stores/permission-store';
 import { RoleChangedBanner } from './RoleChangedBanner';
 import { useTokenExpiry } from '@/hooks/useTokenExpiry';
@@ -43,14 +45,54 @@ export function AppShell({ children }: AppShellProps) {
 
   const { clearManifests, load, loaded } = usePermissionStore();
 
-  const isPublicRoute = ['/login', '/forgot-password'].includes(pathname);
+  // Role comes from Clerk publicMetadata — the single authoritative source.
+  // (The permissions API also returns a role; it is NOT read here. See the
+  // master plan decision (f).)
+  const role = (user?.publicMetadata?.role as string | undefined) ?? null;
 
-  // 1. Route Guard
+  // Route lookup is memoized on pathname so the guard effect below does not
+  // re-run on every render — matchRoute() returns a fresh object each call.
+  const route = useMemo(() => matchRoute(pathname), [pathname]);
+
+  // "public" means no ROLE check. It does NOT mean unauthenticated — every
+  // non-'public' route still requires a signed-in user (step 2 below).
+  // Derived from PROTECTED_ROUTES so a new public route needs no edit here.
+  const isPublicRoute = route?.permission === 'public';
+
+  // 1. Route Guard — fails closed. Order matters:
+  //    Clerk not ready -> nothing.  Not signed in -> /login (unless public).
+  //    Unknown path -> /404.  External nav entry -> skip.  public -> skip.
+  //    Otherwise canRole(), deny -> /403.
   useEffect(() => {
-    if (isLoaded && !isSignedIn && !isPublicRoute) {
-      router.replace('/login');
+    if (!isLoaded) return;
+
+    // Clerk reports isLoaded before useUser() has necessarily hydrated. If
+    // isSignedIn is true but user is still null, `role` is null, canRole()
+    // denies everything, and a legitimate user gets a /403 flash on cold
+    // cache. Wait for the user object — the effect re-runs when it lands.
+    if (isSignedIn && !user) return;
+
+    if (!isSignedIn) {
+      if (!isPublicRoute) router.replace('/login');
+      return;
     }
-  }, [isLoaded, isSignedIn, router, isPublicRoute]);
+
+    if (!route) {
+      router.replace('/404');
+      return;
+    }
+
+    // External entries (the off-site mytaskacier URL) are nav/shortcut links.
+    // matchRoute() cannot match them today, but branch explicitly rather than
+    // relying on that being true forever.
+    if (route.kind === 'external') return;
+
+    if (route.permission === 'public') return;
+
+    if (!canRole(role, route.permission)) {
+      router.replace('/403');
+    }
+  }, [isLoaded, isSignedIn, user, role, pathname, route, isPublicRoute, router]);
 
   // 2. Request Cancellation on route change
   const prevPathname = React.useRef(pathname);
@@ -95,7 +137,7 @@ export function AppShell({ children }: AppShellProps) {
     id: user.id,
     name: user.fullName || user.username || 'User',
     email: user.primaryEmailAddress?.emailAddress || '',
-    role: (user.publicMetadata?.role as string) || 'sales',
+    role: role || 'sales',
   };
 
   return (
