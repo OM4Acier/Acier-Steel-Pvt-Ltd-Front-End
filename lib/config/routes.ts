@@ -34,6 +34,8 @@ import {
   FileText,
   ShoppingBag,
   User,
+  ShieldAlert,
+  FileQuestion,
 } from 'lucide-react';
 import { canRole, type NewPermission } from './permissions';
 import { NavColor } from './colors';
@@ -280,7 +282,28 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     navColor:             'violet',
     showInNav:            false,
   },
-      ];
+  {
+    // The AppShell guard redirects denied users here. MUST be 'public' - a
+    // route requiring a permission could bounce the user back to /403 in a
+    // loop. Same for /404.
+    path:                 '/403',
+    permission:           'public',
+    kind:                 'internal',
+    label:                'Forbidden',
+    icon:                 ShieldAlert,
+    showInNav:            false,
+  },
+  {
+    // Fail-closed target for unknown paths. Defining app/404/page.tsx also
+    // overwrites the host's generated out/404.html.
+    path:                 '/404',
+    permission:           'public',
+    kind:                 'internal',
+    label:                'Not Found',
+    icon:                 FileQuestion,
+    showInNav:            false,
+  },
+];
 
 
 // ---------------------------------------------------------------------------
