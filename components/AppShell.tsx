@@ -54,10 +54,15 @@ export function AppShell({ children }: AppShellProps) {
   // re-run on every render — matchRoute() returns a fresh object each call.
   const route = useMemo(() => matchRoute(pathname), [pathname]);
 
-  // "public" means no ROLE check. It does NOT mean unauthenticated — every
-  // non-'public' route still requires a signed-in user (step 2 below).
-  // Derived from PROTECTED_ROUTES so a new public route needs no edit here.
-  const isPublicRoute = route?.permission === 'public';
+  // Two DIFFERENT questions, two DIFFERENT flags. Conflating them made the
+  // dashboard lose its NavBar: '/' is permission:'public' (no ROLE check) but
+  // still needs the shell, so only `anonymous` may skip the NavBar.
+  //
+  //   noRoleCheck — permission === 'public'; skip the canRole() step only
+  //   anonymous   — route.anonymous; skip the shell (NavBar) and the
+  //                 signed-in requirement, for /login and the error pages
+  const noRoleCheck = route?.permission === 'public';
+  const isAnonymous = route?.anonymous ?? false;
 
   // 1. Route Guard — fails closed. Order matters:
   //    Clerk not ready -> nothing.  Not signed in -> /login (unless public).
@@ -73,7 +78,9 @@ export function AppShell({ children }: AppShellProps) {
     if (isSignedIn && !user) return;
 
     if (!isSignedIn) {
-      if (!isPublicRoute) router.replace('/login');
+      // Anonymous routes (login, forgot-password, 403, 404) render for
+      // anyone; everything else needs a session.
+      if (!isAnonymous) router.replace('/login');
       return;
     }
 
@@ -87,12 +94,16 @@ export function AppShell({ children }: AppShellProps) {
     // relying on that being true forever.
     if (route.kind === 'external') return;
 
-    if (route.permission === 'public') return;
+    // Narrow on route.permission directly — the `noRoleCheck` boolean does not
+    // narrow the union, so 'public' would otherwise reach canRole() and fail
+    // to typecheck. A local alias keeps the invariant in one place.
+    const need = route.permission;
+    if (need === 'public') return;
 
-    if (!canRole(role, route.permission)) {
+    if (!canRole(role, need)) {
       router.replace('/403');
     }
-  }, [isLoaded, isSignedIn, user, role, pathname, route, isPublicRoute, router]);
+  }, [isLoaded, isSignedIn, user, role, pathname, route, noRoleCheck, isAnonymous, router]);
 
   // 2. Request Cancellation on route change
   const prevPathname = React.useRef(pathname);
@@ -122,8 +133,10 @@ export function AppShell({ children }: AppShellProps) {
     );
   }
 
-  // Public routes (like /login) render their own content without AppShell wrapping
-  if (isPublicRoute) {
+  // Only anonymous routes (login, forgot-password, 403, 404) render without
+  // the NavBar. Every other route — including the dashboard and /account,
+  // which are permission:'public' — renders inside the shell.
+  if (isAnonymous) {
     return <>{children}</>;
   }
 

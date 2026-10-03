@@ -77,6 +77,21 @@ export interface RouteConfig {
    *             usePathname()), so the guard must skip them explicitly.
    */
   kind: 'internal' | 'external';
+  /**
+   * Render WITHOUT the AppShell chrome (no NavBar)?
+   *
+   * NOT the same question as `permission`. The two were conflated until the
+   * dashboard lost its NavBar: AppShell used `permission === 'public'` to mean
+   * "no shell", but that flag only ever meant "no ROLE check".
+   *
+   *   permission: 'public'  -> no role check, but still signed-in + NavBar
+   *   anonymous: true       -> no shell and no auth (login, forgot-password,
+   *                            and the error pages so they render signed out)
+   *
+   * Required on every entry — omitting it is a compile error, so a new route
+   * cannot silently ship without a NavBar.
+   */
+  anonymous: boolean;
   /** Nav label — omit to hide from menus. */
   label?: string;
   /** Direct lucide-react component. No separate icon map needed. */
@@ -116,15 +131,6 @@ export const ROUTES = {
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];
 
 // ---------------------------------------------------------------------------
-// Public paths — no auth check
-// ---------------------------------------------------------------------------
-
-export const PUBLIC_PATHS: string[] = [
-  ROUTES.LOGIN,
-  ROUTES.FORGOT_PASSWORD,
-];
-
-// ---------------------------------------------------------------------------
 // THE REGISTRY
 // ---------------------------------------------------------------------------
 
@@ -133,6 +139,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/',
     permission: 'public',
     kind: 'internal',
+    anonymous:false,
     label:                'Dashboard',
     icon:                 LayoutDashboard,
     navColor:             'blue',
@@ -143,6 +150,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/attendance',
     permission: 'attendance:read',
     kind: 'internal',
+    anonymous:false,
     label:                'Attendance',
     icon:                 CheckCircle2,
     navColor:             'green',
@@ -154,6 +162,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/orders',
     permission: 'orders:read',
     kind: 'internal',
+    anonymous:false,
     label:                'Orders',
     icon:                 Briefcase,
     navColor:             'emerald',
@@ -164,6 +173,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 'https://mytaskacier.web.app/',
     permission: 'public',
     kind: 'external',
+    anonymous:false,
     label:                'One Time Work',
     icon:                 ListTodo,
     navColor:             'violet',
@@ -176,6 +186,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/leads/v2',
     permission:           'leads:read',
     kind:                 'internal',
+    anonymous:false,
     label:                'Leads (V2)',
     icon:                 TrendingUp,
     navColor:             'red',
@@ -185,6 +196,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/leads-center',
     permission: 'leads-center:read',
     kind: 'internal',
+    anonymous:false,
     label:                'Leads Center',
     icon:                 BarChart3,
     navColor:             'amber',
@@ -195,6 +207,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/leads',
     permission: 'leads:read',
     kind: 'internal',
+    anonymous:false,
     label:                'Leads',
     icon:                 TrendingUp,
     navColor:             'red',
@@ -205,6 +218,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/purchases',
     permission: 'purchases:read',
     kind: 'internal',
+    anonymous:false,
     label:                'Purchases',
     icon:                 ShoppingCart,
     navColor:             'fuchsia',
@@ -215,6 +229,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/visitors',
     permission: 'visitors:read',
     kind: 'internal',
+    anonymous:false,
     label:                'Visitor Records',
     icon:                 UserPlus,
     navColor:             'teal',
@@ -225,6 +240,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/reports',
     permission: 'reports:read',
     kind: 'internal',
+    anonymous:false,
     label:                'Reports',
     icon:                 BarChart3,
     navColor:             'gray',
@@ -235,6 +251,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 ROUTES.USERS,
     permission:           'users:read',
     kind:                 'internal',
+    anonymous:false,
     label:                'Users',
     icon:                 Users,
     navColor:             'indigo',
@@ -245,6 +262,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/customers',
     permission: 'customers:read',
     kind: 'internal',
+    anonymous:false,
     label:                'Customer',
     icon:                 Package,
     navColor:             'cyan', // Updated to Cyan
@@ -258,6 +276,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     // still requires a signed-in user for every non-"/login" route.
     permission:           'public',
     kind:                 'internal',
+    anonymous:false,
     label:                'Account',
     icon:                 User,
     showInNav:            false,
@@ -266,6 +285,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 ROUTES.SHEET_HISTORY,
     permission:           'sheet-history:read',
     kind:                 'internal',
+    anonymous:false,
     label:                'Sheet History',
     icon:                 FileText,
     navColor:             'sky',
@@ -280,6 +300,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/tasks',
     permission:           'tasks:read',
     kind:                 'internal',
+    anonymous:false,
     label:                'Tasks',
     icon:                 ListTodo,
     navColor:             'violet',
@@ -292,6 +313,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/403',
     permission:           'public',
     kind:                 'internal',
+    anonymous:true,
     label:                'Forbidden',
     icon:                 ShieldAlert,
     showInNav:            false,
@@ -302,6 +324,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/404',
     permission:           'public',
     kind:                 'internal',
+    anonymous:true,
     label:                'Not Found',
     icon:                FileQuestion,
     showInNav:            false,
@@ -313,6 +336,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 ROUTES.LOGIN,
     permission:           'public',
     kind:                 'internal',
+    anonymous:true,
     label:                'Login',
     icon:                 LogIn,
     showInNav:            false,
@@ -321,6 +345,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 ROUTES.FORGOT_PASSWORD,
     permission:           'public',
     kind:                 'internal',
+    anonymous:true,
     label:                'Forgot Password',
     icon:                 KeyRound,
     showInNav:            false,
@@ -333,6 +358,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/test',
     permission:           'public',
     kind:                 'internal',
+    anonymous:false,
     label:                'Test',
     icon:                 FlaskConical,
     showInNav:            false,
@@ -341,6 +367,7 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
     path:                 '/test-api',
     permission:           'public',
     kind:                 'internal',
+    anonymous:false,
     label:                'Test API',
     icon:                 FlaskConical,
     showInNav:            false,
@@ -351,10 +378,6 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-export function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.includes(pathname);
-}
 
 /**
  * Strip trailing slashes so '/orders/' and '/orders' resolve identically.
