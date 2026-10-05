@@ -9,6 +9,7 @@ import {
   canCreatePartDelivery, canCancelOrder,
 } from '../../permissions';
 import { canTransitionToGeneral } from '../../constants';
+import { RoleGate } from '@/components/RBAC';
 import { EditHistory } from '../EditHistory';
 import { OrderActionsFooterProps } from './cardTypes';
 
@@ -57,14 +58,16 @@ const OrderActionsFooter: React.FC<OrderActionsFooterProps> = ({
           {/* Status Transition Buttons */}
           {canTransitionToGeneral(status || '', 'Approved for Production') &&
             isSuperAdmin(role) && (
-              <Button
-                onClick={onApprove}
-                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={isSaving}
-              >
-                {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Approve Order
-              </Button>
+              <RoleGate need="orders:approve" mode="disable">
+                <Button
+                  onClick={onApprove}
+                  className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={isSaving}
+                >
+                  {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Approve Order
+                </Button>
+              </RoleGate>
             )}
 
           {canTransitionToGeneral(status || '', 'Ready for Dispatch') &&
@@ -110,14 +113,16 @@ const OrderActionsFooter: React.FC<OrderActionsFooterProps> = ({
                 )}
 
                 {/* Button */}
-                <Button
-                  onClick={onDispatchedInvoiced}
-                  className="flex-1 sm:flex-none bg-yellow-500 hover:bg-yellow-600 text-white disabled:opacity-50"
-                  disabled={isSaving || isPaymentPending}
-                >
-                  {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  <Truck className="w-4 h-4 mr-2" /> Dispatched & Invoiced
-                </Button>
+                <RoleGate need="orders:dispatch" mode="disable">
+                  <Button
+                    onClick={onDispatchedInvoiced}
+                    className="flex-1 sm:flex-none bg-yellow-500 hover:bg-yellow-600 text-white disabled:opacity-50"
+                    disabled={isSaving || isPaymentPending}
+                  >
+                    {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    <Truck className="w-4 h-4 mr-2" /> Dispatched & Invoiced
+                  </Button>
+                </RoleGate>
               </div>
 
             )}
@@ -161,26 +166,30 @@ const OrderActionsFooter: React.FC<OrderActionsFooterProps> = ({
                     )}
 
                     {isSuperAdmin(role) && (
-                      <Button
-                        variant="destructive"
-                        onClick={onDeleteClick}
-                        className="w-full"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" /> Delete Order
-                      </Button>
+                      <RoleGate need="orders:delete" mode="disable">
+                        <Button
+                          variant="destructive"
+                          onClick={onDeleteClick}
+                          className="w-full"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" /> Delete Order
+                        </Button>
+                      </RoleGate>
                     )}
 
                     {canTransitionToGeneral(status || '', 'Cancelled') &&
                       canCancelOrder(role) && (
-                        <Button
-                          variant="destructive"
-                          onClick={onCancelOrder}
-                          className="w-full"
-                          disabled={isSaving}
-                        >
-                          {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                          <XCircle className="w-4 h-4 mr-2" /> Cancel Order
-                        </Button>
+                        <RoleGate need="orders:cancel" mode="disable">
+                          <Button
+                            variant="destructive"
+                            onClick={onCancelOrder}
+                            className="w-full"
+                            disabled={isSaving}
+                          >
+                            {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            <XCircle className="w-4 h-4 mr-2" /> Cancel Order
+                          </Button>
+                        </RoleGate>
                       )}
 
                     {/* Edit History */}

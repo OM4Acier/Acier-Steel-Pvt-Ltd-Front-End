@@ -45,6 +45,7 @@ import { useUser } from '@clerk/react';
 import { usePermissionStore } from '@/stores/permission-store';
 import { NavButton } from '@/components/NavButton';
 import { getCreateShortcuts } from '@/lib/config/routes';
+import { RoleGate } from '@/components/RBAC';
 import { UserProfile } from '@/types/rbac.types';
 
 interface SortSelectorProps {
@@ -377,13 +378,15 @@ export default function OrdersView() {
         />
 
         {currentUserProfile && getCreateShortcuts(currentUserProfile.role).some(s => s.id === 'order') && (
-          <NavButton
-            type="crate"
-            text="New Order"
-            className=""
-            onClick={() => setIsCreateOrderDialogOpen(true)}
-            isLoading={isFetchingOrders}
-          />
+          <RoleGate need="orders:create">
+            <NavButton
+              type="crate"
+              text="New Order"
+              className=""
+              onClick={() => setIsCreateOrderDialogOpen(true)}
+              isLoading={isFetchingOrders}
+            />
+          </RoleGate>
         )}
 
 

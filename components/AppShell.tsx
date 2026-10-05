@@ -18,10 +18,12 @@
 
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useAuth, useUser, useClerk } from '@clerk/react';
 import { usePathname, useRouter } from 'next/navigation';
 import { requestRegistry } from '@/lib/request-registry';
+import { matchRoute } from '@/lib/config/routes';
+import { canRole } from '@/lib/config/permissions';
 import { usePermissionStore } from '@/stores/permission-store';
 import { RoleChangedBanner } from './RoleChangedBanner';
 import { useTokenExpiry } from '@/hooks/useTokenExpiry';
@@ -43,14 +45,65 @@ export function AppShell({ children }: AppShellProps) {
 
   const { clearManifests, load, loaded } = usePermissionStore();
 
-  const isPublicRoute = ['/login', '/forgot-password'].includes(pathname);
+  // Role comes from Clerk publicMetadata — the single authoritative source.
+  // (The permissions API also returns a role; it is NOT read here. See the
+  // master plan decision (f).)
+  const role = (user?.publicMetadata?.role as string | undefined) ?? null;
 
-  // 1. Route Guard
+  // Route lookup is memoized on pathname so the guard effect below does not
+  // re-run on every render — matchRoute() returns a fresh object each call.
+  const route = useMemo(() => matchRoute(pathname), [pathname]);
+
+  // Two DIFFERENT questions, two DIFFERENT flags. Conflating them made the
+  // dashboard lose its NavBar: '/' is permission:'public' (no ROLE check) but
+  // still needs the shell, so only `anonymous` may skip the NavBar.
+  //
+  //   noRoleCheck — permission === 'public'; skip the canRole() step only
+  //   anonymous   — route.anonymous; skip the shell (NavBar) and the
+  //                 signed-in requirement, for /login and the error pages
+  const noRoleCheck = route?.permission === 'public';
+  const isAnonymous = route?.anonymous ?? false;
+
+  // 1. Route Guard — fails closed. Order matters:
+  //    Clerk not ready -> nothing.  Not signed in -> /login (unless public).
+  //    Unknown path -> /404.  External nav entry -> skip.  public -> skip.
+  //    Otherwise canRole(), deny -> /403.
   useEffect(() => {
-    if (isLoaded && !isSignedIn && !isPublicRoute) {
-      router.replace('/login');
+    if (!isLoaded) return;
+
+    // Clerk reports isLoaded before useUser() has necessarily hydrated. If
+    // isSignedIn is true but user is still null, `role` is null, canRole()
+    // denies everything, and a legitimate user gets a /403 flash on cold
+    // cache. Wait for the user object — the effect re-runs when it lands.
+    if (isSignedIn && !user) return;
+
+    if (!isSignedIn) {
+      // Anonymous routes (login, forgot-password, 403, 404) render for
+      // anyone; everything else needs a session.
+      if (!isAnonymous) router.replace('/login');
+      return;
     }
-  }, [isLoaded, isSignedIn, router, isPublicRoute]);
+
+    if (!route) {
+      router.replace('/404');
+      return;
+    }
+
+    // External entries (the off-site mytaskacier URL) are nav/shortcut links.
+    // matchRoute() cannot match them today, but branch explicitly rather than
+    // relying on that being true forever.
+    if (route.kind === 'external') return;
+
+    // Narrow on route.permission directly — the `noRoleCheck` boolean does not
+    // narrow the union, so 'public' would otherwise reach canRole() and fail
+    // to typecheck. A local alias keeps the invariant in one place.
+    const need = route.permission;
+    if (need === 'public') return;
+
+    if (!canRole(role, need)) {
+      router.replace('/403');
+    }
+  }, [isLoaded, isSignedIn, user, role, pathname, route, noRoleCheck, isAnonymous, router]);
 
   // 2. Request Cancellation on route change
   const prevPathname = React.useRef(pathname);
@@ -80,8 +133,10 @@ export function AppShell({ children }: AppShellProps) {
     );
   }
 
-  // Public routes (like /login) render their own content without AppShell wrapping
-  if (isPublicRoute) {
+  // Only anonymous routes (login, forgot-password, 403, 404) render without
+  // the NavBar. Every other route — including the dashboard and /account,
+  // which are permission:'public' — renders inside the shell.
+  if (isAnonymous) {
     return <>{children}</>;
   }
 
@@ -95,7 +150,7 @@ export function AppShell({ children }: AppShellProps) {
     id: user.id,
     name: user.fullName || user.username || 'User',
     email: user.primaryEmailAddress?.emailAddress || '',
-    role: (user.publicMetadata?.role as string) || 'sales',
+    role: role || 'sales',
   };
 
   return (

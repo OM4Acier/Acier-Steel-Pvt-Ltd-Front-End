@@ -27,6 +27,7 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { UserProfile } from '@/types/rbac.types';
 import { NavButton } from '@/components/NavButton';
+import { RoleGate } from '@/components/RBAC';
 import { NavbarExtension } from '@/context/NavbarExtensionContext';
 import { useUser } from '@clerk/react';
 import { usePermissionStore } from '@/stores/permission-store';
@@ -1080,16 +1081,18 @@ export default function LeadManagementPage() {
                       <X className="w-3.5 h-3.5" />
                       <span>Clear</span>
                     </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleExportLeads}
-                      disabled={isFetching}
-                      className="h-10 rounded-2xl text-xs font-semibold gap-1.5 border-0 bg-gradient-to-b from-amber-400 to-orange-500 text-white shadow-[0_10px_24px_-8px_rgba(217,119,6,0.55)] hover:from-amber-500 hover:to-orange-600"
-                    >
-                      {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                      <span>Export CSV</span>
-                    </Button>
+                    <RoleGate need="leads:export">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleExportLeads}
+                        disabled={isFetching}
+                        className="h-10 rounded-2xl text-xs font-semibold gap-1.5 border-0 bg-gradient-to-b from-amber-400 to-orange-500 text-white shadow-[0_10px_24px_-8px_rgba(217,119,6,0.55)] hover:from-amber-500 hover:to-orange-600"
+                      >
+                        {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                        <span>Export CSV</span>
+                      </Button>
+                    </RoleGate>
                   </div>
                 </div>
               </PopoverContent>
