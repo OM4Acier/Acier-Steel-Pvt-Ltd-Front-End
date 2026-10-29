@@ -3,7 +3,8 @@ import {
   IUser, 
   CreateUserPayload, 
   UpdateUserRolePayload, 
-  UpdateUserFieldsPayload 
+  UpdateUserFieldsPayload,
+  UpdateUserPermissionsPayload
 } from '@/types/user.types';
 
 /**
@@ -20,8 +21,12 @@ export const usersApi = {
    * GET /api/admin/users
    */
   getUsers: async (): Promise<IUser[]> => {
-    const res = await apiClient.get<{ success: boolean; users: IUser[] }>('/admin/users');
-    return res?.users || [];
+    const res = await apiClient.get<any>('/admin/users');
+    if (Array.isArray(res)) return res;
+    if (Array.isArray(res?.users)) return res.users;
+    if (Array.isArray(res?.data)) return res.data;
+    if (Array.isArray(res?.data?.users)) return res.data.users;
+    return [];
   },
 
   /**
@@ -58,6 +63,32 @@ export const usersApi = {
     );
     if (!res) throw new Error('Request cancelled');
     return res.user;
+  },
+
+  /**
+   * Replace a user's per-user permission GRANTS.
+   * PATCH /api/admin/users/:clerkId/permissions
+   *
+   * Body carries EXTRAS ONLY. Permissions the user's role already grants are
+   * recomputed server-side and must NOT be sent here — sending them would let
+   * a stale grant survive a later role change that removes it.
+   *
+   * Identified by clerkId, not the Mongo _id: every other route in this file
+   * keys on clerkId, and UserList keys its rows on user.clerkId.
+   *
+   * NOTE: the backend route does not exist yet. Until it ships this call
+   * returns 404 and grants simply do not persist.
+   */
+  updateUserPermissions: async (
+    clerkId: string,
+    permissions: UpdateUserPermissionsPayload['permissions'],
+  ): Promise<{ permissions: string[] }> => {
+    const res = await apiClient.patch<{ success: boolean; permissions: string[] }>(
+      `/admin/users/${clerkId}`,
+      { permissions },
+    );
+    if (!res) throw new Error('Request cancelled');
+    return { permissions: res.permissions ?? [] };
   },
 
   /**

@@ -148,10 +148,17 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     if (salesExecCacheRef.current) return salesExecCacheRef.current;
     if (salesExecInflightRef.current) return salesExecInflightRef.current;
     const inflight = usersApi.getUsers()
-      .then((users) => {
-        const mapped = users
-          .filter((u) => u.name && u.email)
-          .map((u) => ({ id: u.clerkId, name: u.name, email: u.email }));
+      .then((rawUsers: any) => {
+        const list: any[] = Array.isArray(rawUsers)
+          ? rawUsers
+          : (rawUsers?.users || rawUsers?.data || []);
+        const mapped = list
+          .map((u: any) => ({
+            id: u.clerkId || u.id || u._id || '',
+            name: u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'Unknown',
+            email: u.email || u.emailAddress || '',
+          }))
+          .filter((u) => u.id && (u.name || u.email));
         salesExecCacheRef.current = mapped;
         return mapped;
       })
@@ -190,11 +197,17 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     let cancelled = false;
     void fetchSalesExecUsers().then((users) => {
       if (cancelled) return;
-      setOrgContactOptions(
-        users.map((u) => ({ value: `user-${u.id}`, label: u.name, subLabel: u.email })),
-      );
+      const options = users.map((u) => ({ value: `user-${u.id}`, label: u.name, subLabel: u.email }));
+      if (currentUserProfile && !options.some((o) => o.value === `user-${currentUserProfile.id}`)) {
+        options.unshift({
+          value: `user-${currentUserProfile.id}`,
+          label: currentUserProfile.name || currentUserProfile.email,
+          subLabel: currentUserProfile.email,
+        });
+      }
+      setOrgContactOptions(options);
       if (currentUserProfile && !selectedSalesExec) {
-        const self = users.find((u) => u.id === currentUserProfile.id);
+        const self = users.find((u) => u.id === currentUserProfile.id || u.email === currentUserProfile.email);
         setSelectedSalesExec(
           self
             ? { userId: self.id, name: self.name, email: self.email }
@@ -732,7 +745,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
     setIsRetryingFileUpload(true);
     try {
       await uploadAllFilesParallel(createdOrderDeoNo);
-      onShowMessage({ type: 'success', text: '🎉 Success!' });
+      onShowMessage({ type: 'success', text: 'Success!' });
       resetFormData();
       onOrderCreated();
       handleClose();
@@ -800,7 +813,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
         await uploadAllFilesParallel(createdOrder.deoNo);
       }
 
-      onShowMessage({ type: 'success', text: `✓ Order ${createdOrder.deoNo} created!` });
+      onShowMessage({ type: 'success', text: `Order ${createdOrder.deoNo} created!` });
       resetFormData();
       onOrderCreated();
       handleClose();
@@ -840,10 +853,10 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
               </div>
               <div>
                 <DialogTitle className="text-xl font-black tracking-tight">
-                  {createdOrderDeoNo ? `Sync Assets: ${createdOrderDeoNo}` : 'Initiate New Order'}
+                  {createdOrderDeoNo ? `Retry Upload: ${createdOrderDeoNo}` : 'Create New Order'}
                 </DialogTitle>
                 <p className="text-[10px] uppercase font-bold text-gray-400 mt-0.5">
-                  Commercial Orchestration Portal
+                  Sales Portal
                 </p>
               </div>
             </div>
@@ -851,28 +864,28 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
 
           {prefillFromQuotation?.qno && (
             <div className="mx-8 mt-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold flex items-center justify-between">
-              <span>Prefilled from Quotation #{prefillFromQuotation.qno}</span>
+              <span>Copied from Quote #{prefillFromQuotation.qno}</span>
             </div>
           )}
 
           <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-8 space-y-5 dialog-custom-scrollbar">
 
-            {/* SECTION 1: CORE IDENTITY */}
+            {/* SECTION 1: ORDER DETAILS */}
             <section className={sectionCardClass}>
               <h3 className={sectionLabelClass}>
-                <Fingerprint className="w-3.5 h-3.5" /> Order Information
+                <Fingerprint className="w-3.5 h-3.5" /> Order Details
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                 <div className="md:col-span-4 space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
-                    Delivery Order Number
+                    Order Number (DEO)
                   </Label>
                   <div className="relative group">
                     <Input
                       id="deoNo"
                       value={orderData.deoNo}
                       onChange={handleChange}
-                      placeholder="Enter DEO No."
+                      placeholder="Enter order number"
                       className={`${inputHeight} pr-[90px] rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm focus:ring-4 focus:ring-blue-500/5 font-mono text-base font-bold`}
                     />
                     <button
@@ -882,7 +895,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                       className="absolute right-1.5 top-1.5 h-9 px-3.5 rounded-xl flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition-all active:scale-95 group/btn"
                     >
                       <span className="text-[10px] font-black uppercase tracking-tight">
-                        {fetchingDeoNumbers ? '...' : 'Fetch'}
+                        {fetchingDeoNumbers ? '...' : 'Get Next'}
                       </span>
                       <RefreshCw
                         className={`w-3.5 h-3.5 ${fetchingDeoNumbers ? 'animate-spin' : 'group-hover/btn:rotate-180 transition-transform duration-500'}`}
@@ -904,7 +917,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
 
                 <div className="md:col-span-3 space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
-                    Standard Page
+                    Priority
                   </Label>
                   <div
                     onClick={handlePriorityToggle}
@@ -916,7 +929,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                       <Zap
                         className={`w-3.5 h-3.5 ${orderData.isHighPriority ? 'fill-red-600 animate-pulse' : ''}`}
                       />
-                      {orderData.isHighPriority ? 'CRITICAL' : 'STANDARD'}
+                      {orderData.isHighPriority ? 'Urgent' : 'Normal'}
                     </span>
                     <Switch
                       checked={orderData.isHighPriority}
@@ -925,22 +938,22 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                   </div>
                 </div>
 
-                {/* Organization Contact - Reusable searchable dropdown */}
+                {/* Sales Contact - Reusable searchable dropdown */}
                 <div className="md:col-span-5 space-y-2">
                   <Label
                     htmlFor="orgContact"
                     className="text-[10px] font-bold uppercase text-gray-400 ml-1"
                   >
-                    Organization Contact
+                    Sales Contact
                   </Label>
                   <SelectDropdown
                     id="orgContact"
                     options={orgContactOptions}
                     value={selectedSalesExecValue}
                     onValueChange={commitSalesExecById}
-                    placeholder="Select organization contact"
+                    placeholder="Choose sales contact"
                     searchable
-                    searchPlaceholder="Search by name or email…"
+                    searchPlaceholder="Search name or email"
                     triggerClassName={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm focus:ring-4 focus:ring-blue-500/5 transition-all text-sm font-bold`}
                     contentClassName="z-[10002] rounded-2xl p-2 shadow-2xl border-gray-100 max-h-60 overflow-y-auto"
                   />
@@ -948,11 +961,11 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
               </div>
             </section>
 
-            {/* SECTION 2: CLIENT INTEGRATION */}
+            {/* SECTION 2: CUSTOMER DETAILS */}
             <section className={sectionCardClass}>
               <div className="flex items-center justify-between px-1">
                 <h3 className={sectionLabelClass}>
-                  <Users className="w-3.5 h-3.5" /> Client Integration
+                  <Users className="w-3.5 h-3.5" /> Customer Details
                 </h3>
                 <div className="flex items-center gap-2">
                   {selectedClient && (
@@ -963,7 +976,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                       onClick={openEditCustomer}
                       className="h-7 px-3 rounded-lg text-[9px] font-black uppercase text-blue-600 hover:bg-blue-100/50 flex items-center gap-1.5 transition-all"
                     >
-                      <Edit2 className="w-3 h-3" /> Update Profile
+                      <Edit2 className="w-3 h-3" /> Edit Customer
                     </Button>
                   )}
                   <button
@@ -973,7 +986,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                     className="h-9 px-3.5 rounded-xl flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition-all active:scale-95 group/btn"
                   >
                     <span className="text-[10px] font-black uppercase tracking-tight">
-                      {isFetchingClients ? '...' : 'Fetch'}
+                      {isFetchingClients ? '...' : 'Refresh'}
                     </span>
                     <RefreshCw
                       className={`w-3.5 h-3.5 ${isFetchingClients ? 'animate-spin' : 'group-hover/btn:rotate-180 transition-transform duration-500'}`}
@@ -991,7 +1004,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                         value={clientSearchTerm || orderData.client}
                         onChange={handleClientSearchChange}
                         onFocus={() => setIsClientSearchOpen(true)}
-                        placeholder="Search Business Entities..."
+                        placeholder="Search customers..."
                         className={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm focus:ring-4 focus:ring-blue-500/5 transition-all text-sm font-bold`}
                       />
                     </div>
@@ -1008,7 +1021,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent className="rounded-xl font-black text-[10px] uppercase tracking-[0.15em] bg-blue-600 text-white border-none px-4 py-2.5 shadow-2xl">
-                        New Entity Registration
+                        Add New Customer
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -1029,15 +1042,15 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                           </div>
                           <div className="text-[10px] text-gray-400 flex flex-wrap gap-2.5 mt-1.5 font-bold uppercase tracking-tight">
                             <span className="flex items-center gap-1.5">
-                              <span className="text-[9px] opacity-40">GST:</span> {c.gst || '---'}
+                              <span className="text-[9px] opacity-40">GST No:</span> {c.gst || '---'}
                             </span>
                             <span className="text-gray-200">|</span>
                             <span className="flex items-center gap-1.5">
-                              <span className="text-[9px] opacity-40">PAN:</span> {c.pan || '---'}
+                              <span className="text-[9px] opacity-40">PAN No:</span> {c.pan || '---'}
                             </span>
                             <span className="text-gray-200">|</span>
                             <span className="flex items-center gap-1.5">
-                              <span className="text-[9px] opacity-40">TEL:</span>{' '}
+                              <span className="text-[9px] opacity-40">Phone:</span>{' '}
                               {c.phones?.[0] || '---'}
                             </span>
                           </div>
@@ -1057,7 +1070,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                       onChange={handleChange}
                       onFocus={() => setIsPhoneDropdownOpen(true)}
                       onBlur={() => setTimeout(() => setIsPhoneDropdownOpen(false), 200)}
-                      placeholder="Primary Contact"
+                      placeholder="Phone Number"
                       className={`${inputHeight} pl-11 rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm transition-all text-sm font-bold`}
                     />
                   </div>
@@ -1103,7 +1116,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                     <div className="space-y-3">
                       <div className="flex items-center justify-between px-1">
                         <Label className="text-[9px] font-black uppercase text-gray-400">
-                          Invoice Destination
+                          Billing Address
                         </Label>
                         <div
                           onClick={() => handleIncludeBillingChange(!includeBillingInInvoice)}
@@ -1121,7 +1134,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                             <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300 peer-checked:translate-x-4 scale-110" />
                           </div>
                           <span className="text-[9px] text-gray-500 font-black uppercase hover:text-blue-600 transition-colors">
-                            Apply to Notes
+                            Add to Notes
                           </span>
                         </div>
                       </div>
@@ -1135,17 +1148,17 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                     <div className="space-y-3">
                       <div className="flex items-center justify-between px-1">
                         <Label className="text-[9px] font-black uppercase text-gray-400">
-                          Delivery Endpoint
+                          Delivery Address
                         </Label>
                         <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-lg text-[9px] font-black uppercase border border-blue-100 dark:border-blue-800/30">
-                          <Check className="w-2.5 h-2.5" /> Auto-Synced
+                          <Check className="w-2.5 h-2.5" /> Auto-filled
                         </div>
                       </div>
                       <SelectDropdown
                         options={SHIPPING_SENTINEL_OPTIONS}
                         value={selectedShippingAddress}
                         onValueChange={handleShippingAddressChange}
-                        placeholder="Select Logistics Point"
+                        placeholder="Delivery Address"
                         triggerClassName={`${inputHeight} rounded-2xl bg-gray-50/50 dark:bg-gray-900/50 border-gray-100 shadow-sm font-black text-gray-700 dark:text-gray-200`}
                         contentClassName="z-[10001] rounded-[1.5rem] p-2 shadow-2xl border-gray-100 max-h-60 overflow-y-auto"
                       >
@@ -1170,32 +1183,32 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
               )}
             </section>
 
-            {/* SECTION 3: PRODUCT INFORMATION */}
+            {/* SECTION 3: PRODUCT DETAILS */}
             <section className={sectionCardClass}>
               <h3 className={sectionLabelClass}>
-                <Package className="w-3.5 h-3.5" /> Product Information
+                <Package className="w-3.5 h-3.5" /> Product Details
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
                 <div className="md:col-span-8 space-y-2">
-                                  <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
-                                    Product Specifications
-                                  </Label>
-                                  <RichTextarea
-                                    id="products"
-                                    value={orderData.products || ''}
-                                    onChange={handleChange}
-                                    rows={5}
-                                    placeholder="e.g., **500 sqm** Color Coated Sheets; Price: ₹{{500*120}}/sqm"
-                                    className="rounded-[1.5rem] border-gray-100 shadow-sm text-sm font-medium leading-relaxed"
-                                  />
-                                </div>
+                  <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
+                    Product Details
+                  </Label>
+                  <RichTextarea
+                    id="products"
+                    value={orderData.products || ''}
+                    onChange={handleChange}
+                    rows={5}
+                    placeholder="e.g., 500 sqm Color Coated Sheets; Price: ₹{{500*120}}/sqm"
+                    className="rounded-[1.5rem] border-gray-100 shadow-sm text-sm font-medium leading-relaxed"
+                  />
+                </div>
                 <div className="md:col-span-4 space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
-                    Voice Note
+                    Record Voice Note
                   </Label>
                   <div className="p-5 rounded-[1.5rem] bg-blue-50/30 dark:bg-blue-900/10 border border-dashed border-blue-200 dark:border-blue-800/50 min-h-[160px] flex flex-col justify-center items-center">
                     <span className="text-[9px] font-black text-blue-600/60 uppercase mb-4 block">
-                      Audio Instructions
+                      Record Voice Note
                     </span>
                     <AudioManager
                       currentUser={currentUserProfile}
@@ -1216,7 +1229,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100 dark:border-white/5">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
-                    Transit Provider
+                    Shipping Provider
                   </Label>
                   <div className="flex gap-3">
                     <SelectDropdown
@@ -1228,14 +1241,14 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                           details: { ...prev.details!, transportProvider: v as any },
                         }))
                       }
-                      placeholder="Provider"
+                      placeholder="Carrier"
                       triggerClassName={`${inputHeight} rounded-2xl flex-1 bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
                       contentClassName="z-[10001] rounded-xl"
                     />
                     {orderData.details?.transportProvider === 'own' && (
                       <Input
                         className={`${inputHeight} rounded-2xl flex-1 border-blue-100 dark:border-blue-900/30 font-bold text-sm shadow-sm`}
-                        placeholder="Carrier Identity"
+                        placeholder="Carrier"
                         value={orderData.details?.transportProviderName || ''}
                         onChange={(e) =>
                           setOrderData((prev) => ({
@@ -1248,18 +1261,18 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                   </div>
                 </div>
                 <div className="space-y-2">
-                                  <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
-                                    Measurement Kata
-                                  </Label>
-                                  <SelectDropdown
-                                    options={MEASUREMENT_KATA_OPTIONS}
-                                    value={orderData.details?.measurementKata || ''}
-                                    onValueChange={handleWeightScaleChange}
-                                    placeholder="Select Kata Type"
-                                    triggerClassName={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
-                                    contentClassName="z-[10001] rounded-xl"
-                                  />
-                                </div>
+                  <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
+                    Weight / Measure
+                  </Label>
+                  <SelectDropdown
+                    options={MEASUREMENT_KATA_OPTIONS}
+                    value={orderData.details?.measurementKata || ''}
+                    onValueChange={handleWeightScaleChange}
+                    placeholder="Select Kata Type"
+                    triggerClassName={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
+                    contentClassName="z-[10001] rounded-xl"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -1269,7 +1282,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                   className={`flex items-center justify-between w-full p-4 rounded-2xl transition-all group border ${isDeliveryInfoExpanded ? 'bg-white dark:bg-gray-900 border-gray-200 shadow-inner' : 'bg-gray-100/40 dark:bg-white/5 border-transparent hover:bg-gray-100'}`}
                 >
                   <span className="text-[10px] font-black text-gray-500 group-hover:text-blue-600 uppercase flex items-center gap-3">
-                    <MapPin className="w-3.5 h-3.5" /> Site Delivery Information
+                    <MapPin className="w-3.5 h-3.5" /> Delivery Site Notes
                   </span>
                   {isDeliveryInfoExpanded ? (
                     <ChevronUp className="w-4 h-4 text-gray-400" />
@@ -1312,10 +1325,10 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                     </div>
                     <div className="space-y-1">
                       <span className="text-xs font-black text-gray-500 group-hover:text-blue-600 uppercase block">
-                        Upload Project Files
+                        Upload Files
                       </span>
                       <span className="text-[10px] font-bold text-gray-400 block italic opacity-60">
-                        Drop blueprints, photos, or purchase orders here
+                        Drop files here or click to upload
                       </span>
                     </div>
                   </Label>
@@ -1340,15 +1353,15 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
               </div>
             </section>
 
-            {/* SECTION 5: INVOICE INFORMATION */}
+            {/* SECTION 4: BILLING DETAILS */}
             <section className={sectionCardClass}>
               <h3 className={sectionLabelClass}>
-                <Zap className="w-3.5 h-3.5" /> Invoice Information
+                <Zap className="w-3.5 h-3.5" /> Billing Details
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
                 <div className="md:col-span-8 space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
-                    Invoice Note
+                    Billing Note
                   </Label>
                   <RichTextarea
                     id="invoiceDetails"
@@ -1362,7 +1375,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                 </div>
                 <div className="md:col-span-4 space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
-                    Billing Voice Note
+                    Record Billing Note
                   </Label>
                   <div className="p-5 rounded-[1.5rem] bg-white dark:bg-white/5 border border-gray-100 h-[120px] flex items-center justify-center shadow-sm">
                     <AudioManager
@@ -1389,7 +1402,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                 <div className="flex-1 bg-blue-50/50 dark:bg-blue-900/20 p-3.5 rounded-2xl border border-blue-100 dark:border-blue-800/30 flex items-center gap-4 animate-pulse">
                   <div className="flex-1 space-y-1">
                     <div className="flex justify-between text-[10px] font-black uppercase text-blue-600">
-                      <span>Uploading Protocol</span>
+                      <span>Upload Progress</span>
                       <span>
                         {Math.round((uploadProgress.completed / uploadProgress.total) * 100)}%
                       </span>
@@ -1413,7 +1426,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                 onClick={handleClose}
                 className="h-12 px-8 rounded-2xl font-black text-xs text-gray-400 hover:bg-gray-50 transition-all"
               >
-                DISCARD
+                Cancel
               </Button>
               <div className="flex gap-3">
                 {createdOrderDeoNo && (
@@ -1425,7 +1438,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                     variant="outline"
                     className="h-12 px-6 rounded-2xl border-red-200 text-red-600 font-black text-xs hover:bg-red-50"
                   >
-                    RESET
+                    Clear
                   </Button>
                 )}
                 <Button
@@ -1440,7 +1453,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                   ) : (
                     <Check className="w-4 h-4 mr-3" />
                   )}
-                  {createdOrderDeoNo ? 'RETRY SYNC' : 'CREATE ORDER'}
+                  {createdOrderDeoNo ? 'Retry Upload' : 'Create Order'}
                 </Button>
               </div>
             </div>

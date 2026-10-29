@@ -24,6 +24,12 @@ export interface IUser {
   department:   string;       // business field — set by admin, NOT synced from Clerk.
   contactNo:    string;       // business field — set by admin, NOT synced from Clerk.
   organization: string;       // business field — set by admin, NOT synced from Clerk.
+  /**
+   * Per-user permission GRANTS, on top of what the role already grants.
+   * EXTRAS ONLY — a permission the role already has is not repeated here, so
+   * changing a role cannot leave a stale grant behind.
+   */
+  permissions?: string[];     // catalogue strings. Empty/absent = no grants.
   createdAt:    string;
   updatedAt?:   string;
 }
@@ -56,4 +62,15 @@ export interface UpdateUserFieldsPayload {
   contactNo?:    string;
   organization?: string;
   name?:         string;  // updates Clerk + MongoDB
+}
+
+/**
+ * Payload for setting per-user permission grants.
+ * PATCH /api/admin/users/:clerkId/permissions
+ *
+ * EXTRAS ONLY — role defaults are recomputed server-side and must not be sent
+ * here. The backend rejects any string not in the catalogue.
+ */
+export interface UpdateUserPermissionsPayload {
+  permissions: string[];
 }
