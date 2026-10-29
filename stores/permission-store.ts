@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AppModule, PermissionManifest, PermissionsResponse } from '@/types/permissions';
+import { PermissionsResponse } from '@/types/permissions';
 import { permissionsApi } from '@/lib/api/endpoints/permissions';
 
 /**
@@ -10,7 +10,7 @@ import { permissionsApi } from '@/lib/api/endpoints/permissions';
  */
 
 interface PermissionState {
-  manifests: Partial<Record<AppModule, PermissionManifest>>;
+  permissions: string[];
   version: string | null;
   role: string | null;
   roleChanged: boolean;
@@ -26,7 +26,7 @@ interface PermissionState {
 export const usePermissionStore = create<PermissionState>()(
   persist(
     (set, get) => ({
-      manifests: {},
+      permissions: [],
       version: null,
       role: null,
       roleChanged: false,
@@ -59,7 +59,7 @@ export const usePermissionStore = create<PermissionState>()(
       },
 
       setManifests: (response: PermissionsResponse) => {
-        const { version, manifests, role } = response;
+        const { version, permissions, role } = response;
         const currentVersion = get().version;
         const currentRole = get().role;
 
@@ -71,14 +71,8 @@ export const usePermissionStore = create<PermissionState>()(
           return;
         }
 
-        // Convert array to Record for O(1) lookup
-        const manifestRecord: Partial<Record<AppModule, PermissionManifest>> = {};
-        manifests.forEach((m) => {
-          manifestRecord[m.module] = m;
-        });
-
         set({
-          manifests: manifestRecord,
+          permissions: permissions ?? [],
           version,
           role,
           loaded: true,
@@ -88,7 +82,7 @@ export const usePermissionStore = create<PermissionState>()(
 
       clearManifests: () => {
         set({
-          manifests: {},
+          permissions: [],
           version: null,
           role: null,
           roleChanged: false,

@@ -22,6 +22,7 @@ import {
 import { Loader2, Edit3 } from 'lucide-react';
 import { usersApi } from '@/lib/api/endpoints/users';
 import { IUser, UserRole, UpdateUserFieldsPayload } from '@/types/user.types';
+import { GrantsSection } from './GrantsSection';
 import { toast } from 'sonner';
 
 interface EditUserDialogProps {
@@ -53,6 +54,11 @@ export function EditUserDialog({ user, currentUserId, isOpen, onClose, onSuccess
     organization: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Per-user permission grants, EXTRAS ONLY. Seeded from user.permissions
+  // (absent until the backend returns it, hence the ?? []).
+  const [grants, setGrants] = useState<string[]>([]);
+
+  const isSelf = user?.clerkId === currentUserId;
 
   useEffect(() => {
     if (user) {
@@ -63,6 +69,7 @@ export function EditUserDialog({ user, currentUserId, isOpen, onClose, onSuccess
         contactNo: user.contactNo || '',
         organization: user.organization || '',
       });
+      setGrants(user.permissions ?? []);
     }
   }, [user]);
 
@@ -96,6 +103,22 @@ export function EditUserDialog({ user, currentUserId, isOpen, onClose, onSuccess
 
       if (Object.keys(fieldUpdates).length > 0) {
         promises.push(usersApi.updateUserFields(user.clerkId, fieldUpdates));
+      }
+
+      // 3. Handle Permission Grants (extras only)
+      // Same self-edit lockout as role: you must not be able to grant yourself
+      // users:manage. This is UI only — the backend must reject it too.
+      const originalGrants = user.permissions ?? [];
+      const grantsChanged =
+        grants.length !== originalGrants.length ||
+        grants.some((g, i) => g !== [...originalGrants].sort()[i]);
+
+      if (grantsChanged) {
+        if (isSelf) {
+          toast.warning('You cannot change your own permissions.');
+        } else {
+          promises.push(usersApi.updateUserPermissions(user.clerkId, grants));
+        }
       }
 
       if (promises.length === 0) {
@@ -208,6 +231,13 @@ export function EditUserDialog({ user, currentUserId, isOpen, onClose, onSuccess
               />
             </div>
           </div>
+
+          <GrantsSection
+            role={formData.role}
+            grants={grants}
+            disabled={isSelf}
+            onChange={setGrants}
+          />
 
           <DialogFooter className="pt-4 border-t border-gray-100 dark:border-gray-700 mt-2">
             <Button

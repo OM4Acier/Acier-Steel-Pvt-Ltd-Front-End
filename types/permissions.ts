@@ -38,7 +38,8 @@ export interface PermissionManifest {
 }
 
 export interface PermissionsResponse {
-  version:   string;
-  role:      string;
-  manifests: PermissionManifest[];
+  version:      string;
+  role:         string;
+  permissions:  string[];
+  manifests?:   PermissionManifest[];
 }

@@ -11,29 +11,29 @@ import { AppModule } from '@/types/permissions';
  * Uses conservative defaults if manifest or field is not found.
  */
 export function usePermissions(module: AppModule) {
-  const manifest = usePermissionStore((state) => state.manifests[module]);
+  const manifest: any = usePermissionStore((state) => (state as any).manifests?.[module]);
 
   const isVisible = useCallback((fieldId: string): boolean => {
     if (!manifest) return true; // Show by default
-    const field = manifest.fields.find((f) => f.fieldId === fieldId);
+    const field = manifest.fields.find((f: any) => f.fieldId === fieldId);
     return field ? field.visible : true;
   }, [manifest]);
 
   const isEditable = useCallback((fieldId: string): boolean => {
     if (!manifest) return false; // Protected by default
-    const field = manifest.fields.find((f) => f.fieldId === fieldId);
+    const field = manifest.fields.find((f: any) => f.fieldId === fieldId);
     return field ? field.editable : false;
   }, [manifest]);
 
   const isDeletable = useCallback((fieldId: string): boolean => {
     if (!manifest) return false; // Protected by default
-    const field = manifest.fields.find((f) => f.fieldId === fieldId);
+    const field = manifest.fields.find((f: any) => f.fieldId === fieldId);
     return field ? field.deletable : false;
   }, [manifest]);
 
   const canViewSection = useCallback((sectionId: string): boolean => {
     if (!manifest) return true; // Show by default
-    const section = manifest.sections.find((s) => s.sectionId === sectionId);
+    const section = manifest.sections.find((s: any) => s.sectionId === sectionId);
     return section ? section.visible : true;
   }, [manifest]);
 

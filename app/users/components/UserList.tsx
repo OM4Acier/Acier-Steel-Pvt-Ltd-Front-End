@@ -85,8 +85,8 @@ export function UserList({ currentUserId, refreshKey, onEdit, onDelete }: UserLi
               </TableCell>
             </TableRow>
           ) : (
-            users.map((user) => (
-              <TableRow key={user.clerkId} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors">
+            users.map((user, idx) => (
+              <TableRow key={idx} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors">
                 <TableCell>
                   <div className="flex flex-col gap-0.5">
                     <span className="font-bold text-gray-900 dark:text-white flex items-center gap-2">

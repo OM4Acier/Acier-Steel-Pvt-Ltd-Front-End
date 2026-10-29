@@ -15,7 +15,39 @@ import {
   AlertCircle, // Added AlertCircle for unpaid status
 } from 'lucide-react';
 
-import { Order, TransportProvider } from '../types';
+import { Order, TransportProvider, CustomerPaymentStatus } from '../types';
+
+export interface PaymentBadgeProps {
+  status?: CustomerPaymentStatus | string;
+  className?: string;
+}
+
+/**
+ * Reusable Payment Badge component (Simplified to English only)
+ * Renders PAID (emerald) or UNPAID (amber, pulsing) status badges.
+ */
+
+export const PaymentBadge: React.FC<PaymentBadgeProps> = ({ status, className = '' }) => {
+  if (status === CustomerPaymentStatus.NEW_UNPAID) {
+    return (
+      <span className={`${className} payment-badge payment-badge--unpaid`}>
+        <span className="payment-badge__dot payment-badge__dot--unpaid" aria-hidden="true" />
+        <span>UNPAID</span>
+      </span>
+    );
+  }
+
+  if (status === CustomerPaymentStatus.NEW_PAID) {
+    return (
+      <span className={`${className} payment-badge payment-badge--paid `}>
+        <span className="payment-badge__dot payment-badge__dot--paid" aria-hidden="true" />
+        <span>FULL PAID</span>
+      </span>
+    );
+  }
+
+  return null;
+};
 
 const TRANSPORT_STYLES: Record<TransportProvider, { label: string; tagColor: string; badgeClass: string; borderClass: string }> = {
   porter: {
@@ -57,9 +89,11 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   const transportProvider = order?.details?.transportProvider;
   const transportStyle = transportProvider ? TRANSPORT_STYLES[transportProvider] : null;
 
+  const isUnpaid = order?.customerPaymentStatus === CustomerPaymentStatus.NEW_UNPAID;
+
   const cardStatusStyle = order.isHighPriority
     ? 'border-2 border-red-500 shadow-xl shadow-red-500/40'
-    : order?.customerPaymentStatus === 'new-unpaid'
+    : isUnpaid
       ? 'border-2 border-amber-500 shadow-lg shadow-amber-500/30'
       : transportStyle
         ? transportStyle.borderClass
@@ -94,15 +128,11 @@ export const OrderCard: React.FC<OrderCardProps> = ({
         {/* Right Side: Badges Group (Optimized with flex-shrink-0 and flipped order) */}
         <div className="flex items-center gap-2 flex-shrink-0">
 
-          {/* Unpaid Badge - Simplified to English only */}
-          {order?.customerPaymentStatus === 'new-unpaid' && (
-            <Badge className="bg-amber-500 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shadow-md animate-pulse border border-white/50">
-              UNPAID
-            </Badge>
-          )}
+          {/* Payment Status Badge - Reusable (Simplified to English only) */}
+          <PaymentBadge status={order?.customerPaymentStatus} className="text-[12px] px-3 py-2 rounded-full" />
 
           {/* DEO No. Badge (Standard Badge) - Now positioned first */}
-          <Badge className="bg-white text-black font-bold text-sm px-3 py-1 rounded-full shadow-md">
+          <Badge className="bg-white text-black font-bold  text-sm px-3 py-1 rounded-full shadow-md">
             {order.deoNo}
           </Badge>
 
@@ -153,7 +183,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
         </div>
 
         {/* Payment Warning */}
-        {order?.customerPaymentStatus === "new-unpaid" && (
+        {isUnpaid && (
           <div className="flex items-center rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
             <AlertCircle className="mr-3 h-5 w-5 flex-shrink-0" />
 
