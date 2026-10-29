@@ -114,6 +114,7 @@ export default function OrdersView() {
   // Use Clerk directly for synchronous user data
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
   const role = usePermissionStore(s => s.role);
+  const permissions = usePermissionStore(s => s.permissions);
 
   // Map Clerk user to the legacy UserProfile shape
   const currentUserProfile = useMemo(() => {
@@ -377,17 +378,15 @@ export default function OrdersView() {
           className={`w-5 h-5 ${displayMode === 'grid' ? 'text-blue-600' : 'text-gray-400'}`}
         />
 
-        {currentUserProfile && getCreateShortcuts(currentUserProfile.role).some(s => s.id === 'order') && (
-          <RoleGate need="orders:create">
-            <NavButton
-              type="crate"
-              text="New Order"
-              className=""
-              onClick={() => setIsCreateOrderDialogOpen(true)}
-              isLoading={isFetchingOrders}
-            />
-          </RoleGate>
-        )}
+        {currentUserProfile && (getCreateShortcuts(currentUserProfile.role).some(s => s.id === 'order') || permissions?.includes('orders:create')) && (
+                    <NavButton
+                      type="crate"
+                      text="New Order"
+                      className=""
+                      onClick={() => setIsCreateOrderDialogOpen(true)}
+                      isLoading={isFetchingOrders}
+                    />
+                )}
 
 
         <NavButton

@@ -20,6 +20,7 @@
  * because they never referenced the union being replaced.
  */
 
+import { usePermissionStore } from '@/stores/permission-store';
 import { useUser } from '@clerk/react';
 import { canRole, type NewPermission } from '@/lib/config/permissions';
 
@@ -35,8 +36,12 @@ import { canRole, type NewPermission } from '@/lib/config/permissions';
  * gate on `isLoaded` from useAuth() alongside this rather than rendering
  * optimistically.
  */
+
 export function useCanDo(need: NewPermission): boolean {
   const { user } = useUser();
   const role = (user?.publicMetadata?.role as string | undefined) ?? null;
-  return canRole(role, need);
+  const roleOk = canRole(role, need);
+  const permissions = usePermissionStore(s => s.permissions);
+  const permOk = Array.isArray(permissions) && permissions.includes(need as string);
+  return roleOk || permOk;
 }

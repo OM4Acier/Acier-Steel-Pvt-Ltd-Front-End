@@ -107,7 +107,7 @@ axiosInstance.interceptors.request.use(async (config: CustomRequestConfig) => {
   }
 
   // 2. Register with AbortController registry
-  config.signal = requestRegistry.register(`${method}:${url}`);
+  config.signal = requestRegistry.register(`${method}:${url}:${Date.now()}:${Math.random()}`);
 
   log(method, url);
 
