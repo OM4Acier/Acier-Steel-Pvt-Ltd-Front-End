@@ -1098,17 +1098,8 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                     )}
                 </div>
 
-                <div className="md:col-span-3 lg:col-span-4">
-                  <SelectDropdown
-                    options={PAYMENT_STATUS_OPTIONS}
-                    value={orderData.customerPaymentStatus}
-                    onValueChange={handlePaymentStatusChange}
-                    placeholder="Status"
-                    triggerClassName={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm px-5 text-sm font-bold`}
-                    contentClassName="z-[10001] rounded-2xl p-2 shadow-2xl border-gray-100"
-                  />
-                </div>
               </div>
+
 
               {selectedClient && (
                 <div className="mt-4 p-6 bg-white dark:bg-white/5 rounded-[2rem] border border-gray-100 dark:border-white/10 space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
@@ -1226,7 +1217,7 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100 dark:border-white/5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-gray-100 dark:border-white/5">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
                     Shipping Provider
@@ -1245,20 +1236,20 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                       triggerClassName={`${inputHeight} rounded-2xl flex-1 bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
                       contentClassName="z-[10001] rounded-xl"
                     />
-                    {orderData.details?.transportProvider === 'own' && (
-                      <Input
-                        className={`${inputHeight} rounded-2xl flex-1 border-blue-100 dark:border-blue-900/30 font-bold text-sm shadow-sm`}
-                        placeholder="Carrier"
-                        value={orderData.details?.transportProviderName || ''}
-                        onChange={(e) =>
-                          setOrderData((prev) => ({
-                            ...prev,
-                            details: { ...prev.details!, transportProviderName: e.target.value },
-                          }))
-                        }
-                      />
-                    )}
                   </div>
+                  {(orderData.details?.transportProvider === 'own' || orderData.details?.transportProvider === 'porter') && (
+                    <Input
+                      className={`${inputHeight} rounded-2xl w-full border-blue-100 dark:border-blue-900/30 font-bold text-sm shadow-sm mt-3`}
+                      placeholder="Carrier"
+                      value={orderData.details?.transportProviderName || ''}
+                      onChange={(e) =>
+                        setOrderData((prev) => ({
+                          ...prev,
+                          details: { ...prev.details!, transportProviderName: e.target.value },
+                        }))
+                      }
+                    />
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
@@ -1269,8 +1260,21 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
                     value={orderData.details?.measurementKata || ''}
                     onValueChange={handleWeightScaleChange}
                     placeholder="Select Kata Type"
-                    triggerClassName={`${inputHeight} rounded-2xl bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
+                    triggerClassName={`${inputHeight} rounded-2xl w-full bg-white dark:bg-gray-900 border-gray-100 shadow-sm text-sm font-bold`}
                     contentClassName="z-[10001] rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase text-gray-400 ml-1">
+                    Customer Payment Status
+                  </Label>
+                  <SelectDropdown
+                    options={PAYMENT_STATUS_OPTIONS}
+                    value={orderData.customerPaymentStatus}
+                    onValueChange={handlePaymentStatusChange}
+                    placeholder="Status"
+                    triggerClassName={`${inputHeight} rounded-2xl w-full bg-white dark:bg-gray-900 border-gray-100 shadow-sm px-5 text-sm font-bold`}
+                    contentClassName="z-[10001] rounded-2xl p-2 shadow-2xl border-gray-100"
                   />
                 </div>
               </div>

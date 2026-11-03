@@ -30,11 +30,11 @@ const DeliveryVehicleCard: React.FC<DeliveryVehicleCardProps> = ({
   canEditSiteInfo,
   canEditVehicleFiles,
 }) => {
-  const isPoter = transportProvider === 'porter' || (transportProvider as string) === 'porter';
-  const cardTone = isPoter
+  const isPorter = transportProvider === 'porter' || (transportProvider as string) === 'porter';
+  const cardTone = isPorter
     ? 'bg-violet-100 dark:bg-violet-900/30 border-l-[10px] border-violet-600 dark:border-violet-500'
     : 'bg-teal-100 dark:bg-teal-900/30 border-l-[10px] border-teal-600 dark:border-teal-500';
-  const iconTone = isPoter
+  const iconTone = isPorter
     ? 'text-violet-600 dark:text-violet-400'
     : 'text-teal-600 dark:text-teal-400';
 

@@ -22,7 +22,7 @@ const fromLabelRecord = <T extends string>(record: Record<T, string>): SelectOpt
 // value + label both come from types.ts (Credit Note / New - Paid / New - Unpaid / Regular)
 export const PAYMENT_STATUS_OPTIONS: SelectOption[] = (
   Object.keys(CUSTOMER_PAYMENT_STATUS_LABELS) as CustomerPaymentStatus[]
-).map((key) => {
+).filter((key) => key !== (CustomerPaymentStatus.REGULAR as string)).map((key) => {
   const colorClass =
     key === CustomerPaymentStatus.NEW_PAID
       ? 'text-green-600'
