@@ -284,24 +284,13 @@ export const CreateOrderDialog: React.FC<CreateOrderDialogProps> = ({
       }
     }
 
-    // 4. Handle salesExec suggestion prefill — match the suggested name/email
-    //    to a cached user and select that option in the dropdown.
-    if (prefillFromQuotation.salesExec) {
-      const suggestion = prefillFromQuotation.salesExec.toLowerCase();
-      const match = salesExecCacheRef.current?.find(
-        (u) =>
-          u.name.toLowerCase().includes(suggestion) ||
-          u.email.toLowerCase().includes(suggestion),
-      );
-      if (match) {
-        setSelectedSalesExec({ userId: match.id, name: match.name, email: match.email });
-      } else {
-        // Fallback: keep the typed suggestion as the display name.
-        setSelectedSalesExec((prev) => prev ?? {
-          name: prefillFromQuotation.salesExec,
-          email: '',
-        });
-      }
+    // Sales executive defaults to the logged-in user only.
+    if (currentUserProfile) {
+      setSelectedSalesExec({
+        userId: currentUserProfile.id,
+        name: currentUserProfile.name,
+        email: currentUserProfile.email,
+      });
     }
 
     // Store quotationNo for traceability

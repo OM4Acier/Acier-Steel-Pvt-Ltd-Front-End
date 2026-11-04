@@ -174,7 +174,7 @@ export default function OrdersView() {
         sGst,
         sAddr,
         inqSrc,
-        salesExec,
+        salesExec: currentUserProfile?.name,
         items,
       });
 
