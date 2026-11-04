@@ -85,7 +85,7 @@ const DeliveryVehicleCard: React.FC<DeliveryVehicleCardProps> = ({
                 triggerClassName="w-full h-9 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm"
                 contentClassName="z-[9050]"
               />
-              {transportProvider === 'own' && (
+              {(transportProvider === 'own' || transportProvider === 'porter') && (
                 <div className="space-y-1 mt-2">
                   <Label htmlFor="transportProviderName" className="font-medium text-xs text-gray-700 dark:text-gray-300">Provider Name:</Label>
                   <Input
@@ -103,7 +103,7 @@ const DeliveryVehicleCard: React.FC<DeliveryVehicleCardProps> = ({
               <div className="text-base font-medium text-gray-900 dark:text-white">
                 {transportProvider ? TRANSPORT_PROVIDER_LABELS[transportProvider as TransportProvider] : 'N/A'}
               </div>
-              {transportProvider === 'own' && transportProviderName && (
+              {(transportProvider === 'own' || transportProvider === 'porter') && transportProviderName && (
                 <div className="space-y-0.5 mt-1">
                   <Label className="font-medium text-xs text-gray-500 dark:text-gray-400">Provider Name:</Label>
                   <p className="text-base font-bold text-fuchsia-800 dark:text-fuchsia-200">
