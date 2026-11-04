@@ -1,4 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { toast } from 'sonner';
 import { env } from '@/lib/config/env';
 import { notifyTokenExpired } from '@/lib/auth/client-auth';
 import { requestRegistry } from '../request-registry';
@@ -53,6 +54,8 @@ interface CustomRequestConfig extends InternalAxiosRequestConfig {
   retries?: number;
   retryCount?: number;
   skipAuth?: boolean;
+  silent?: boolean;
+  skipToast?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +121,14 @@ axiosInstance.interceptors.request.use(async (config: CustomRequestConfig) => {
 axiosInstance.interceptors.response.use(
   (response) => {
     log(response.config.method || 'GET', response.config.url || '', response.status);
+    const config = response.config as CustomRequestConfig;
+    const data = response.data as any;
+    if (!config?.skipToast && !config?.silent) {
+      if (data && typeof data === 'object' && (data.message || data.successMessage)) {
+        const m = data.message || data.successMessage;
+        toast.success(typeof m === 'string' ? m : (m?.message || JSON.stringify(m)));
+      }
+    }
     return response.data;
   },
   async (error: AxiosError) => {
@@ -153,9 +164,14 @@ axiosInstance.interceptors.response.use(
     let message = 'Network error';
     if (error.response?.data) {
       const data = error.response.data as any;
-      message = data.message || data.error || error.message;
+      const m = data.message || data.error || error.message;
+      message = typeof m === 'string' ? m : (m?.message || JSON.stringify(m));
     } else if (error.message) {
       message = error.message;
+    }
+
+    if (!config?.skipToast && !config?.silent) {
+      toast.error(message);
     }
 
     throw new ApiError(message, status, url, method, error.response?.data);

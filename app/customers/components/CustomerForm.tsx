@@ -150,7 +150,13 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
     );
   };
 
-  // ─── Change handlers ──────────────────────────────────────────────────────
+  // Auto-extract PAN from GST when missing
+  useEffect(() => {
+    if (formData.gst && formData.gst.length >= 12 && !formData.pan) {
+      const extracted = formData.gst.substring(2, 12);
+      setFormData((prev) => ({ ...prev, pan: extracted }));
+    }
+  }, [formData.gst]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target;
