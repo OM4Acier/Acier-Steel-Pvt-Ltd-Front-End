@@ -285,6 +285,7 @@ export default function LeadManagementPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isCreateLeadDialogOpen, setIsCreateLeadDialogOpen] = useState<boolean>(false);
+  const [leadPrefill, setLeadPrefill] = useState<{ clientName?: string; phone?: string; productInterest?: string }>({});
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [isActionLoading, setIsActionLoading] = useState<false | string>(false);
 
@@ -434,6 +435,11 @@ export default function LeadManagementPage() {
 
   useEffect(() => {
     if (searchParams.get('action') === 'create') {
+      setLeadPrefill({
+        clientName: searchParams.get('clientName') || searchParams.get('cName') || undefined,
+        phone: searchParams.get('phone') || undefined,
+        productInterest: searchParams.get('productInterest') || searchParams.get('product') || undefined,
+      });
       setIsCreateLeadDialogOpen(true);
       const params = new URLSearchParams(searchParams.toString());
       params.delete('action');
@@ -1224,6 +1230,10 @@ export default function LeadManagementPage() {
           onSubmit={handleAddLead}
           isSaving={isActionLoading === 'create'}
           currentUser={currentUserProfile}
+          initialClientName={leadPrefill.clientName}
+          initialPhone={leadPrefill.phone}
+          initialProductInterest={leadPrefill.productInterest}
+          key={JSON.stringify(leadPrefill)}
         />
 
         {selectedLead && (
@@ -1359,17 +1369,20 @@ interface LeadFormDialogProps {
   ) => void;
   isSaving: boolean;
   currentUser: UserProfile | null;
+  initialClientName?: string;
+  initialPhone?: string;
+  initialProductInterest?: string;
 }
 
-const LeadFormDialog: React.FC<LeadFormDialogProps> = ({ isOpen, onOpenChange, onSubmit, isSaving, currentUser }) => {
+const LeadFormDialog: React.FC<LeadFormDialogProps> = ({ isOpen, onOpenChange, onSubmit, isSaving, currentUser, initialClientName, initialPhone, initialProductInterest }) => {
   const defaultReminder = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     return d.toISOString().split('T')[0];
   }, []);
-  const [clientName, setClientName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [productInterest, setProductInterest] = useState('');
+  const [clientName, setClientName] = useState(initialClientName || '');
+  const [phone, setPhone] = useState(initialPhone || '');
+  const [productInterest, setProductInterest] = useState(initialProductInterest || '');
   const [reminderDate, setReminderDate] = useState<Date | undefined>(defaultReminder ? new Date(defaultReminder) : undefined);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
